@@ -1,9 +1,3 @@
-"""
-Calculates distances and transport costs between stores.
-Supports both haversine distance and optional Google Maps API.
-Ensures proper handling of store IDs.
-"""
-
 import os
 
 import numpy as np
@@ -178,14 +172,14 @@ class DistanceCalculator:
         store_city_map = self.store_data.set_index("store_id")["city"].to_dict()
 
         # Cost parameters
-        base_cost = 10_000  # Base cost per km in VND
-        intercity_factor = 1.5  # 50% more expensive between cities
+        base_cost = 2_000  # Base cost per km in VND
+        intercity_factor = 1.2  # 50% more expensive between cities
 
         # Distance factors (shorter distances are less efficient due to fixed costs)
         distance_factors = {
-            50: 1.2,  # < 50 km: 20% more expensive per km
+            100: 1.2,  # < 100 km: 20% more expensive per km
             500: 1.0,  # 50-500 km: standard rate
-            9999: 0.8,  # > 500 km: 20% less expensive per km (economies of scale)
+            9999: 0.5,  # > 500 km: 50% less expensive per km (economies of scale)
         }
 
         # Calculate transport costs

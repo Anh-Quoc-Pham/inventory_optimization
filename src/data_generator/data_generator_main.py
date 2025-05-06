@@ -172,7 +172,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--output", type=str, default="data", help="Output directory")
     parser.add_argument(
-        "--seed", type=int, default=42, help="Random seed for reproducibility"
+        "--seed", type=int, default=2025, help="Random seed for reproducibility"
     )
     parser.add_argument(
         "--min-days", type=int, default=7, help="Minimum days of inventory threshold"

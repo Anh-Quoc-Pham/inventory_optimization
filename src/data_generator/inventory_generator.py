@@ -1,11 +1,3 @@
-"""
-Balanced Inventory Generator Module
----------------------------------
-Generates inventory data for the inventory optimization system.
-Creates well-balanced inventory imbalances by ensuring a good ratio
-between excess and needed inventory across stores.
-"""
-
 import datetime as dt
 
 import numpy as np
@@ -30,8 +22,8 @@ class InventoryGenerator:
         output_path=None,
         min_days=7,
         max_days=30,
-        excess_percent=40,
-        shortage_percent=40,
+        excess_percent=1,
+        shortage_percent=90,
     ):
         """
         Generate current inventory data based on sales patterns.

@@ -196,9 +196,8 @@ class StoreGenerator:
 
 
 if __name__ == "__main__":
-    # Example usage
     generator = StoreGenerator()
     stores = generator.generate_stores("data/stores.csv")
     print(f"Generated {len(stores)} stores")
-    for store in stores:  # Print all stores
+    for store in stores:
         print(store)

@@ -1,10 +1,3 @@
-"""
-Product Generator Module
------------------------
-Generates product data for the inventory optimization system.
-Creates different product categories with realistic names and pricing.
-"""
-
 import random
 
 import numpy as np
@@ -14,7 +7,7 @@ from src.engine.data_model import Product
 
 
 class ProductGenerator:
-    def __init__(self, random_seed=42):
+    def __init__(self, random_seed=2025):
         """Initialize with optional random seed for reproducibility."""
         self.random_seed = random_seed
         np.random.seed(random_seed)
@@ -210,11 +203,11 @@ class ProductGenerator:
 
         # Define price ranges for each category (in VND)
         self.price_ranges = {
-            "Electronics": (500000, 20000000),  # 500K to 20M VND
-            "Clothing": (100000, 2000000),  # 100K to 2M VND
-            "Home Goods": (200000, 5000000),  # 200K to 5M VND
-            "Food": (20000, 500000),  # 20K to 500K VND
-            "Beauty": (50000, 1000000),  # 50K to 1M VND
+            "Electronics": (500_000, 20_000_000),  # 500K to 20M VND
+            "Clothing": (100_000, 2_000_000),  # 100K to 2M VND
+            "Home Goods": (200_000, 5_000_000),  # 200K to 5M VND
+            "Food": (20_000, 500_000),  # 20K to 500K VND
+            "Beauty": (50_000, 1_000_000),  # 50K to 1M VND
         }
 
         # Define brands for each category

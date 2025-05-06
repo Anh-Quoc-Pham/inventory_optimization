@@ -233,12 +233,21 @@ def run_ga_optimization(analyzer, excess_df, needed_df, args):
     return transfer_plan, None
 
 
-def run_visualizations(analysis_df, results_dict, args):
+def run_visualizations(analysis_df, results_dict, analyzer, args):
     """Create visualizations."""
     print("\n=== CREATING VISUALIZATIONS ===")
 
     # Load store data
     stores_df = pd.read_csv(os.path.join(args.data_dir, "stores.csv"))
+
+    # Create store name mapping dictionary
+    store_name_map = stores_df.set_index("store_id")["store_name"].to_dict()
+
+    # Load product data
+    products_df = pd.read_csv(os.path.join(args.data_dir, "products.csv"))
+
+    # Create product name mapping dictionary
+    product_name_map = products_df.set_index("product_id")["product_name"].to_dict()
 
     # Create visualizer
     visualizer = InventoryVisualizer(stores_df, args.vis_dir)
@@ -250,13 +259,48 @@ def run_visualizations(analysis_df, results_dict, args):
     for method, (transfer_plan, _) in results_dict.items():
         if transfer_plan is not None and not transfer_plan.empty:
             print(f"Visualizing {method} transfer plan...")
-            visualizer.visualize_transfer_plan(transfer_plan)
+
+            # Replace IDs with names in the transfer plan for better visualization
+            transfer_plan_with_names = transfer_plan.copy()
+            if "from_store_id" in transfer_plan_with_names.columns:
+                transfer_plan_with_names["from_store"] = transfer_plan_with_names[
+                    "from_store_id"
+                ].map(store_name_map)
+
+            if "to_store_id" in transfer_plan_with_names.columns:
+                transfer_plan_with_names["to_store"] = transfer_plan_with_names[
+                    "to_store_id"
+                ].map(store_name_map)
+
+            if "product_id" in transfer_plan_with_names.columns:
+                transfer_plan_with_names["product"] = transfer_plan_with_names[
+                    "product_id"
+                ].map(product_name_map)
+
+            visualizer.visualize_transfer_plan(transfer_plan_with_names)
 
     # Visualize impact for each method
-    for method, (_, impact_df) in results_dict.items():
-        if impact_df is not None:
+    for method, (transfer_plan, impact_df) in results_dict.items():
+        if (
+            impact_df is not None
+            and transfer_plan is not None
+            and not transfer_plan.empty
+        ):
             print(f"Visualizing {method} impact...")
-            visualizer.visualize_impact(impact_df)
+
+            # Get post-analysis data from the analyzer's evaluate_plan_impact method
+            _, post_analysis = analyzer.evaluate_plan_impact(transfer_plan)
+
+            visualizer.visualize_impact(
+                impact_df,
+                analysis_df=analysis_df,
+                post_analysis=post_analysis,
+                store_names=store_name_map,
+                product_names=product_name_map,
+                algorithm_name=method,
+                save_png=True,
+                show_plot=False,
+            )
 
     # Create results presenter
     presenter = ResultsPresenter(args.results_dir)
@@ -406,7 +450,7 @@ def main():
 
     # Create visualizations and reports
     if results_dict:
-        run_visualizations(analysis_df, results_dict, args)
+        run_visualizations(analysis_df, results_dict, analyzer, args)
 
     # Display summary results
     if not args.summary_only and results_dict:

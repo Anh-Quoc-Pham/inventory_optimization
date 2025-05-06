@@ -148,6 +148,217 @@ class InventoryVisualizer:
 
         return None
 
+    def visualize_inventory_distribution_comparison(
+        self,
+        analysis_df,
+        post_analysis,
+        store_names,
+        product_names,
+        algorithm_name,
+        save_png=True,
+        show_plot=True,
+    ):
+        """
+        Visualize inventory distribution before and after transfers for the largest stores.
+
+        Args:
+            analysis_df: DataFrame with original inventory analysis data (before)
+            post_analysis: DataFrame with post-transfer inventory analysis data (after)
+            store_names: Dictionary mapping store IDs to store names
+            product_names: Dictionary mapping product IDs to product names
+            algorithm_name: Name of the optimization algorithm used
+            save_png: Whether to save the plot as a PNG file
+            show_plot: Whether to show the plot
+
+        Returns:
+            Matplotlib figure if show_plot is True
+        """
+        print(f"Generating inventory distribution comparison for {algorithm_name}...")
+
+        # Find the 5 largest stores by total inventory
+        store_inventory = (
+            analysis_df.groupby("store_id")["current_stock"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        top_stores = store_inventory.head(5).index.tolist()
+
+        # Filter data for top stores
+        before_data = analysis_df[analysis_df["store_id"].isin(top_stores)]
+        after_data = post_analysis[post_analysis["store_id"].isin(top_stores)]
+
+        # Get store names for top stores
+        store_labels = [
+            store_names.get(store_id, f"Store {store_id}") for store_id in top_stores
+        ]
+
+        # Create figure with subplots for each store
+        fig, axes = plt.subplots(len(top_stores), 2, figsize=(15, 4 * len(top_stores)))
+
+        # For a single store case, make axes indexable as 2D
+        if len(top_stores) == 1:
+            axes = np.array([axes]).reshape(1, 2)
+
+        # Plot inventory status for each store
+        for i, store_id in enumerate(top_stores):
+            store_name = store_labels[i]
+
+            # Before data
+            before_store = before_data[before_data["store_id"] == store_id]
+            status_counts_before = before_store["inventory_status"].value_counts()
+
+            # After data
+            after_store = after_data[after_data["store_id"] == store_id]
+            status_counts_after = after_store["inventory_status"].value_counts()
+
+            # Plot before
+            status_counts_before.plot(
+                kind="pie",
+                ax=axes[i, 0],
+                autopct="%1.1f%%",
+                startangle=90,
+                colors=[
+                    self.status_colors.get(s, "#999999")
+                    for s in status_counts_before.index
+                ],
+                wedgeprops={"edgecolor": "w", "linewidth": 1},
+                labels=None,  # Remove default labels
+            )
+            axes[i, 0].set_title(f"{store_name} - Before")
+            axes[i, 0].set_ylabel("")
+
+            # Add custom legend for the first subplot
+            if i == 0:
+                axes[i, 0].legend(
+                    status_counts_before.index,
+                    loc="upper right",
+                    bbox_to_anchor=(0, 0, 0.95, 0.95),
+                )
+
+            # Plot after
+            status_counts_after.plot(
+                kind="pie",
+                ax=axes[i, 1],
+                autopct="%1.1f%%",
+                startangle=90,
+                colors=[
+                    self.status_colors.get(s, "#999999")
+                    for s in status_counts_after.index
+                ],
+                wedgeprops={"edgecolor": "w", "linewidth": 1},
+                labels=None,  # Remove default labels
+            )
+            axes[i, 1].set_title(f"{store_name} - After")
+            axes[i, 1].set_ylabel("")
+
+            # Add custom legend for the first subplot
+            if i == 0:
+                axes[i, 1].legend(
+                    status_counts_after.index,
+                    loc="upper right",
+                    bbox_to_anchor=(0, 0, 0.95, 0.95),
+                )
+
+        plt.suptitle(
+            f"Inventory Status Distribution Before and After - {algorithm_name}",
+            fontsize=16,
+        )
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.95)
+
+        # Create top products by transfers figure
+        fig2 = self._create_top_products_transfers(
+            analysis_df, post_analysis, product_names, algorithm_name
+        )
+
+        # Save figure
+        if save_png:
+            output_path = os.path.join(
+                self.output_dir,
+                f"inventory_distribution_{algorithm_name.lower().replace(' ', '_')}.png",
+            )
+            fig.savefig(output_path, dpi=300, bbox_inches="tight")
+            print(
+                f"Inventory distribution comparison for {algorithm_name} saved to {output_path}"
+            )
+
+        # If not showing plot, close figure to free memory
+        if not show_plot:
+            plt.close(fig)
+            plt.close(fig2)
+            return None
+
+        return fig
+
+    def _create_top_products_transfers(
+        self, analysis_df, post_analysis, product_names, algorithm_name
+    ):
+        """Create visualization for top products by transfer volume."""
+        # Calculate the difference in inventory before and after transfers
+        merged_df = pd.merge(
+            analysis_df[["store_id", "product_id", "current_stock"]],
+            post_analysis[["store_id", "product_id", "current_stock"]],
+            on=["store_id", "product_id"],
+            suffixes=("_before", "_after"),
+        )
+
+        # Calculate absolute change in inventory
+        merged_df["abs_change"] = abs(
+            merged_df["current_stock_after"] - merged_df["current_stock_before"]
+        )
+
+        # Group by product_id and sum the absolute changes
+        product_changes = (
+            merged_df.groupby("product_id")["abs_change"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        # Get top 10 products
+        top_products = product_changes.head(10)
+
+        # Replace product IDs with names
+        top_products.index = [
+            product_names.get(pid, f"Product {pid}") for pid in top_products.index
+        ]
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Create horizontal bar chart
+        bars = ax.barh(top_products.index, top_products.values, color="#1f77b4")
+
+        # Add data labels
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(
+                width + 10,
+                bar.get_y() + bar.get_height() / 2,
+                f"{int(width)}",
+                ha="left",
+                va="center",
+            )
+
+        ax.set_xlabel("Total Units Transferred")
+        ax.set_title(f"Top 10 Products by Transfer Volume - {algorithm_name}")
+
+        # Invert y-axis to have largest at top
+        ax.invert_yaxis()
+
+        plt.tight_layout()
+
+        # Save figure
+        output_path = os.path.join(
+            self.output_dir,
+            f"top_products_{algorithm_name.lower().replace(' ', '_')}.png",
+        )
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(
+            f"Top products by transfer volume for {algorithm_name} saved to {output_path}"
+        )
+
+        return fig
+
     def visualize_transfer_plan(self, transfer_plan, save_html=True, show_map=True):
         """
         Visualize the transfer plan on a map and with charts.
@@ -258,12 +469,27 @@ class InventoryVisualizer:
 
         return None
 
-    def visualize_impact(self, impact_df, save_png=True, show_plot=True):
+    def visualize_impact(
+        self,
+        impact_df,
+        analysis_df=None,
+        post_analysis=None,
+        store_names=None,
+        product_names=None,
+        algorithm_name="Transfer Plan",
+        save_png=True,
+        show_plot=True,
+    ):
         """
         Visualize the impact of the transfer plan.
 
         Args:
             impact_df: DataFrame with impact analysis
+            analysis_df: Original inventory analysis DataFrame (before transfer)
+            post_analysis: Post-transfer inventory analysis DataFrame
+            store_names: Dictionary mapping store IDs to store names
+            product_names: Dictionary mapping product IDs to product names
+            algorithm_name: Name of the optimization algorithm used
             save_png: Whether to save the plots as PNG files
             show_plot: Whether to show the plots
 
@@ -274,7 +500,7 @@ class InventoryVisualizer:
             print("No impact data to visualize.")
             return None
 
-        print("Generating impact visualizations...")
+        print(f"Generating impact visualizations for {algorithm_name}...")
 
         figures = []
 
@@ -316,7 +542,7 @@ class InventoryVisualizer:
         # Add percentage change
         for i, label in enumerate(status_labels):
             if label in improvement:
-                change = improvement[label]
+                change = improvement.get(label)
                 if isinstance(change, (int, float)):
                     if change > 0:
                         label_text = f"+{change}"
@@ -333,7 +559,7 @@ class InventoryVisualizer:
                     )
 
         ax1.set_ylabel("Number of Items")
-        ax1.set_title("Impact on Inventory Status")
+        ax1.set_title(f"Impact on Inventory Status - {algorithm_name}")
         ax1.set_xticks(x)
         ax1.set_xticklabels(status_labels)
         ax1.legend()
@@ -342,9 +568,30 @@ class InventoryVisualizer:
         figures.append(fig1)
 
         if save_png:
-            output_path = os.path.join(self.output_dir, "impact_inventory_status.png")
+            output_path = os.path.join(
+                self.output_dir,
+                f"impact_inventory_status_{algorithm_name.lower().replace(' ', '_')}.png",
+            )
             fig1.savefig(output_path, dpi=300, bbox_inches="tight")
-            print(f"Impact chart saved to {output_path}")
+            print(f"Impact chart for {algorithm_name} saved to {output_path}")
+
+        # Create inventory distribution comparison if data available
+        if (
+            analysis_df is not None
+            and post_analysis is not None
+            and store_names is not None
+        ):
+            dist_fig = self.visualize_inventory_distribution_comparison(
+                analysis_df,
+                post_analysis,
+                store_names,
+                product_names,
+                algorithm_name,
+                save_png=save_png,
+                show_plot=show_plot,
+            )
+            if dist_fig is not None:
+                figures.append(dist_fig)
 
         # Create key metrics chart
         fig2, ax2 = plt.subplots(figsize=(12, 6))
@@ -411,7 +658,7 @@ class InventoryVisualizer:
                 )
 
         ax2.set_ylabel("Value")
-        ax2.set_title("Impact on Key Performance Metrics")
+        ax2.set_title(f"Impact on Key Performance Metrics - {algorithm_name}")
         ax2.set_xticks(x)
         ax2.set_xticklabels(metric_labels)
         ax2.legend()
@@ -421,10 +668,13 @@ class InventoryVisualizer:
 
         if save_png:
             output_path = os.path.join(
-                self.output_dir, "impact_performance_metrics.png"
+                self.output_dir,
+                f"impact_performance_metrics_{algorithm_name.lower().replace(' ', '_')}.png",
             )
             fig2.savefig(output_path, dpi=300, bbox_inches="tight")
-            print(f"Performance metrics chart saved to {output_path}")
+            print(
+                f"Performance metrics chart for {algorithm_name} saved to {output_path}"
+            )
 
         # If not showing plots, close figures to free memory
         if not show_plot:
@@ -433,6 +683,233 @@ class InventoryVisualizer:
             return None
 
         return figures
+
+    def _create_status_bar_charts(self, analysis_df):
+        """Create bar charts showing inventory status distribution."""
+        # Count items in each status
+        status_counts = analysis_df["inventory_status"].value_counts()
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Create bar chart
+        bars = ax.bar(
+            status_counts.index,
+            status_counts.values,
+            color=[self.status_colors.get(s, "#999999") for s in status_counts.index],
+        )
+
+        # Add text labels
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height + 5,
+                f"{height} ({height/len(analysis_df)*100:.1f}%)",
+                ha="center",
+                va="bottom",
+            )
+
+        ax.set_ylabel("Number of Items")
+        ax.set_title("Inventory Status Distribution")
+
+        plt.tight_layout()
+
+        # Save figure
+        output_path = os.path.join(self.output_dir, "inventory_status_distribution.png")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Inventory status distribution chart saved to {output_path}")
+
+        plt.close(fig)
+
+    def _create_city_charts(self, analysis_df):
+        """Create charts showing inventory status by city."""
+        # Group by city and inventory status
+        city_status = (
+            analysis_df.groupby(["city", "inventory_status"]).size().unstack().fillna(0)
+        )
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Create stacked bar chart
+        city_status.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            color=[self.status_colors.get(s, "#999999") for s in city_status.columns],
+        )
+
+        ax.set_ylabel("Number of Items")
+        ax.set_title("Inventory Status by City")
+        ax.legend(title="Status")
+
+        plt.tight_layout()
+
+        # Save figure
+        output_path = os.path.join(self.output_dir, "inventory_status_by_city.png")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Inventory status by city chart saved to {output_path}")
+
+        plt.close(fig)
+
+    def _create_category_charts(self, analysis_df):
+        """Create charts showing inventory status by product category."""
+        # Group by category and inventory status
+        category_status = (
+            analysis_df.groupby(["category", "inventory_status"])
+            .size()
+            .unstack()
+            .fillna(0)
+        )
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Create stacked bar chart
+        category_status.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            color=[
+                self.status_colors.get(s, "#999999") for s in category_status.columns
+            ],
+        )
+
+        ax.set_ylabel("Number of Items")
+        ax.set_title("Inventory Status by Product Category")
+        ax.legend(title="Status")
+
+        plt.tight_layout()
+
+        # Save figure
+        output_path = os.path.join(self.output_dir, "inventory_status_by_category.png")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Inventory status by category chart saved to {output_path}")
+
+        plt.close(fig)
+
+    def _create_transfer_charts(self, transfer_plan):
+        """Create charts showing transfer distribution."""
+        # Create figure for units transferred by store
+        fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Group by from_store_id and sum units
+        from_units = (
+            transfer_plan.groupby("from_store_id")["units"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        # Group by to_store_id and sum units
+        to_units = (
+            transfer_plan.groupby("to_store_id")["units"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        # If store names are available, use them
+        if "from_store" in transfer_plan.columns:
+            # Create mapping from ID to name
+            from_store_name_map = transfer_plan.set_index("from_store_id")[
+                "from_store"
+            ].to_dict()
+            to_store_name_map = transfer_plan.set_index("to_store_id")[
+                "to_store"
+            ].to_dict()
+
+            # Create named series
+            from_units_named = pd.Series(
+                from_units.values,
+                index=[
+                    from_store_name_map.get(idx, f"Store {idx}")
+                    for idx in from_units.index
+                ],
+                name=from_units.name,
+            )
+
+            to_units_named = pd.Series(
+                to_units.values,
+                index=[
+                    to_store_name_map.get(idx, f"Store {idx}") for idx in to_units.index
+                ],
+                name=to_units.name,
+            )
+
+            # Plot with names
+            from_units_named.head(10).plot(kind="barh", ax=ax1, color="#FF8042")
+            to_units_named.head(10).plot(kind="barh", ax=ax2, color="#0088FE")
+        else:
+            # Plot with IDs
+            from_units.head(10).plot(kind="barh", ax=ax1, color="#FF8042")
+            to_units.head(10).plot(kind="barh", ax=ax2, color="#0088FE")
+
+        ax1.set_xlabel("Units Transferred Out")
+        ax1.set_title("Top 10 Source Stores")
+        ax1.invert_yaxis()  # Invert y-axis to have largest at top
+
+        ax2.set_xlabel("Units Transferred In")
+        ax2.set_title("Top 10 Destination Stores")
+        ax2.invert_yaxis()  # Invert y-axis to have largest at top
+
+        plt.tight_layout()
+
+        # Save figure
+        output_path = os.path.join(self.output_dir, "transfer_by_store.png")
+        fig1.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Transfer by store chart saved to {output_path}")
+
+        plt.close(fig1)
+
+        # Create figure for units transferred by product
+        if "product_id" in transfer_plan.columns:
+            fig2, ax = plt.subplots(figsize=(10, 6))
+
+            # Group by product_id and sum units
+            product_units = (
+                transfer_plan.groupby("product_id")["units"]
+                .sum()
+                .sort_values(ascending=False)
+            )
+
+            # If product names are available, use them
+            if "product" in transfer_plan.columns:
+                # Create mapping from ID to name
+                product_name_map = transfer_plan.set_index("product_id")[
+                    "product"
+                ].to_dict()
+
+                # Create named series
+                product_units_named = pd.Series(
+                    product_units.values,
+                    index=[
+                        product_name_map.get(idx, f"Product {idx}")
+                        for idx in product_units.index
+                    ],
+                    name=product_units.name,
+                )
+
+                # Plot with names
+                product_units_named.head(15).plot(kind="bar", ax=ax, color="#8884d8")
+            else:
+                # Plot with IDs
+                product_units.head(15).plot(kind="bar", ax=ax, color="#8884d8")
+
+            ax.set_xlabel("Product")
+            ax.set_ylabel("Units Transferred")
+            ax.set_title("Top 15 Products by Transfer Volume")
+
+            # Rotate x labels for better readability if using long product names
+            plt.xticks(rotation=45, ha="right")
+
+            plt.tight_layout()
+
+            # Save figure
+            output_path = os.path.join(self.output_dir, "transfer_by_product.png")
+            fig2.savefig(output_path, dpi=300, bbox_inches="tight")
+            print(f"Transfer by product chart saved to {output_path}")
+
+            plt.close(fig2)
 
     def compare_algorithms(self, results_dict, save_png=True, show_plot=True):
         """
@@ -587,226 +1064,3 @@ class InventoryVisualizer:
             return None
 
         return fig
-
-    def _create_status_bar_charts(self, analysis_df):
-        """Create bar charts showing inventory status distribution."""
-        # Count items in each status
-        status_counts = analysis_df["inventory_status"].value_counts()
-
-        # Create figure
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Create bar chart
-        bars = ax.bar(
-            status_counts.index,
-            status_counts.values,
-            color=[self.status_colors.get(s, "#999999") for s in status_counts.index],
-        )
-
-        # Add text labels
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                height + 5,
-                f"{height} ({height/len(analysis_df)*100:.1f}%)",
-                ha="center",
-                va="bottom",
-            )
-
-        ax.set_ylabel("Number of Items")
-        ax.set_title("Inventory Status Distribution")
-
-        plt.tight_layout()
-
-        # Save figure
-        output_path = os.path.join(self.output_dir, "inventory_status_distribution.png")
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Inventory status distribution chart saved to {output_path}")
-
-        plt.close(fig)
-
-    def _create_city_charts(self, analysis_df):
-        """Create charts showing inventory status by city."""
-        # Group by city and inventory status
-        city_status = (
-            analysis_df.groupby(["city", "inventory_status"]).size().unstack().fillna(0)
-        )
-
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 6))
-
-        # Create stacked bar chart
-        city_status.plot(
-            kind="bar",
-            stacked=True,
-            ax=ax,
-            color=[self.status_colors.get(s, "#999999") for s in city_status.columns],
-        )
-
-        ax.set_ylabel("Number of Items")
-        ax.set_title("Inventory Status by City")
-        ax.legend(title="Status")
-
-        plt.tight_layout()
-
-        # Save figure
-        output_path = os.path.join(self.output_dir, "inventory_status_by_city.png")
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Inventory status by city chart saved to {output_path}")
-
-        plt.close(fig)
-
-    def _create_category_charts(self, analysis_df):
-        """Create charts showing inventory status by product category."""
-        # Group by category and inventory status
-        category_status = (
-            analysis_df.groupby(["category", "inventory_status"])
-            .size()
-            .unstack()
-            .fillna(0)
-        )
-
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 6))
-
-        # Create stacked bar chart
-        category_status.plot(
-            kind="bar",
-            stacked=True,
-            ax=ax,
-            color=[
-                self.status_colors.get(s, "#999999") for s in category_status.columns
-            ],
-        )
-
-        ax.set_ylabel("Number of Items")
-        ax.set_title("Inventory Status by Product Category")
-        ax.legend(title="Status")
-
-        plt.tight_layout()
-
-        # Save figure
-        output_path = os.path.join(self.output_dir, "inventory_status_by_category.png")
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Inventory status by category chart saved to {output_path}")
-
-        plt.close(fig)
-
-    def _create_transfer_charts(self, transfer_plan):
-        """Create charts showing transfer distribution."""
-        # Create figure for units transferred by store
-        fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-
-        # Group by from_store_id and sum units
-        from_units = (
-            transfer_plan.groupby("from_store_id")["units"]
-            .sum()
-            .sort_values(ascending=False)
-        )
-
-        # Group by to_store_id and sum units
-        to_units = (
-            transfer_plan.groupby("to_store_id")["units"]
-            .sum()
-            .sort_values(ascending=False)
-        )
-
-        # Plot top 10 source stores
-        from_units.head(10).plot(kind="barh", ax=ax1, color="#FF8042")
-        ax1.set_xlabel("Units Transferred Out")
-        ax1.set_title("Top 10 Source Stores")
-        ax1.invert_yaxis()  # Invert y-axis to have largest at top
-
-        # Plot top 10 destination stores
-        to_units.head(10).plot(kind="barh", ax=ax2, color="#0088FE")
-        ax2.set_xlabel("Units Transferred In")
-        ax2.set_title("Top 10 Destination Stores")
-        ax2.invert_yaxis()  # Invert y-axis to have largest at top
-
-        plt.tight_layout()
-
-        # Save figure
-        output_path = os.path.join(self.output_dir, "transfer_by_store.png")
-        fig1.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Transfer by store chart saved to {output_path}")
-
-        plt.close(fig1)
-
-        # Create figure for units transferred by product
-        if "product_id" in transfer_plan.columns:
-            fig2, ax = plt.subplots(figsize=(10, 6))
-
-            # Group by product_id and sum units
-            product_units = (
-                transfer_plan.groupby("product_id")["units"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
-            # Plot top 15 products
-            product_units.head(15).plot(kind="bar", ax=ax, color="#8884d8")
-            ax.set_xlabel("Product ID")
-            ax.set_ylabel("Units Transferred")
-            ax.set_title("Top 15 Products by Transfer Volume")
-
-            plt.tight_layout()
-
-            # Save figure
-            output_path = os.path.join(self.output_dir, "transfer_by_product.png")
-            fig2.savefig(output_path, dpi=300, bbox_inches="tight")
-            print(f"Transfer by product chart saved to {output_path}")
-
-            plt.close(fig2)
-
-
-if __name__ == "__main__":
-    import os
-
-    from src.engine.analyzer import InventoryAnalyzer
-
-    # Check if data files exist
-    data_dir = "data"
-    output_dir = "visualizations"
-
-    required_files = ["sales_data.csv", "inventory_data.csv", "stores.csv"]
-
-    for file in required_files:
-        if not os.path.exists(os.path.join(data_dir, file)):
-            print(f"Required file {file} not found. Please run data generator first.")
-            exit(1)
-
-    # Load data
-    stores_df = pd.read_csv(os.path.join(data_dir, "stores.csv"))
-
-    # Create visualizer
-    visualizer = InventoryVisualizer(stores_df, output_dir)
-
-    # Create analyzer and load data
-    analyzer = InventoryAnalyzer()
-    analyzer.load_data(
-        sales_path=os.path.join(data_dir, "sales_data.csv"),
-        inventory_path=os.path.join(data_dir, "inventory_data.csv"),
-        stores_path=os.path.join(data_dir, "stores.csv"),
-        products_path=(
-            os.path.join(data_dir, "products.csv")
-            if os.path.exists(os.path.join(data_dir, "products.csv"))
-            else None
-        ),
-    )
-
-    # Analyze data
-    analysis_df = analyzer.analyze_sales_data()
-
-    # Identify imbalances
-    excess_df, needed_df = analyzer.identify_inventory_imbalances()
-
-    # Create visualizations
-    visualizer.visualize_inventory_status(analysis_df)
-
-    # If transfer plans exist, visualize them
-    if os.path.exists(os.path.join(data_dir, "rule_based_transfers.csv")):
-        rule_based_transfers = pd.read_csv(
-            os.path.join(data_dir, "rule_based_transfers.csv")
-        )
-        visualizer.visualize_transfer_plan(rule_based_transfers)

@@ -23,7 +23,7 @@ class InventoryGenerator:
         min_days=7,
         max_days=30,
         excess_percent=1,
-        shortage_percent=90,
+        shortage_percent=60,
     ):
         """
         Generate current inventory data based on sales patterns.
@@ -139,7 +139,7 @@ class InventoryGenerator:
                 # Assign inventory based on store category
                 if store_id in excess_stores:
                     # Create significant excess (40-70 days of inventory)
-                    days_of_stock = np.random.uniform(max_days * 1.5, max_days * 2.5)
+                    days_of_stock = np.random.uniform(max_days * 1.5, max_days * 2)
                     inventory = int(avg_daily_sales * days_of_stock)
                     excess_units = int(inventory - (max_days * avg_daily_sales))
                     total_excess_units += excess_units
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     # Generate inventory data with balanced imbalances
     generator = InventoryGenerator(sales_df)
     inventory_df = generator.generate_inventory_data(
-        "data/inventory_data.csv", excess_percent=40, shortage_percent=40
+        "data/inventory_data.csv", excess_percent=1, shortage_percent=60
     )
 
     # Print summary statistics

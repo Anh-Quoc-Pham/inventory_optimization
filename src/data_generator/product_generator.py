@@ -15,30 +15,30 @@ class ProductGenerator:
 
         # Define product categories and names
         self.electronics_products = [
-            # Smartphones
-            "Galaxy S22",
-            "Galaxy A53",
-            "iPhone 13",
-            "iPhone 14 Pro",
-            "Xiaomi Redmi Note 11",
-            "OPPO A96",
-            "Vivo Y35",
-            "Realme 9 Pro",
-            "Honor X8",
-            # Laptops
-            "MacBook Air",
-            "Dell XPS 13",
-            "HP Pavilion 15",
-            "Lenovo ThinkPad X1",
-            "Acer Swift 3",
-            "ASUS ZenBook 14",
-            "MSI Modern 14",
-            "Surface Laptop",
-            # Tablets
-            "iPad Air",
-            "Galaxy Tab S8",
-            "Lenovo Tab P11",
-            "Xiaomi Pad 5",
+            # # Smartphones
+            # "Galaxy S22",
+            # "Galaxy A53",
+            # "iPhone 13",
+            # "iPhone 14 Pro",
+            # "Xiaomi Redmi Note 11",
+            # "OPPO A96",
+            # "Vivo Y35",
+            # "Realme 9 Pro",
+            # "Honor X8",
+            # # Laptops
+            # "MacBook Air",
+            # "Dell XPS 13",
+            # "HP Pavilion 15",
+            # "Lenovo ThinkPad X1",
+            # "Acer Swift 3",
+            # "ASUS ZenBook 14",
+            # "MSI Modern 14",
+            # "Surface Laptop",
+            # # Tablets
+            # "iPad Air",
+            # "Galaxy Tab S8",
+            # "Lenovo Tab P11",
+            # "Xiaomi Pad 5",
             # Accessories
             "AirPods Pro",
             "Galaxy Buds2",
@@ -203,9 +203,9 @@ class ProductGenerator:
 
         # Define price ranges for each category (in VND)
         self.price_ranges = {
-            "Electronics": (500_000, 20_000_000),  # 500K to 20M VND
+            "Electronics": (500_000, 2_000_000),  # 500K to 2M VND
             "Clothing": (100_000, 2_000_000),  # 100K to 2M VND
-            "Home Goods": (200_000, 5_000_000),  # 200K to 5M VND
+            "Home Goods": (200_000, 2_000_000),  # 200K to 2M VND
             "Food": (20_000, 500_000),  # 20K to 500K VND
             "Beauty": (50_000, 1_000_000),  # 50K to 1M VND
         }

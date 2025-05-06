@@ -1,5 +1,7 @@
 import random
+import sys
 
+sys.path.append(".")
 import numpy as np
 import pandas as pd
 
@@ -204,10 +206,10 @@ class ProductGenerator:
         # Define price ranges for each category (in VND)
         self.price_ranges = {
             "Electronics": (500_000, 2_000_000),  # 500K to 2M VND
-            "Clothing": (100_000, 2_000_000),  # 100K to 2M VND
-            "Home Goods": (200_000, 2_000_000),  # 200K to 2M VND
-            "Food": (20_000, 500_000),  # 20K to 500K VND
-            "Beauty": (50_000, 1_000_000),  # 50K to 1M VND
+            "Clothing": (100_000, 1_200_000),  # 100K to 2M VND
+            "Home Goods": (200_000, 800_000),  # 200K to 2M VND
+            "Food": (100_000, 500_000),  # 100K to 500K VND
+            "Beauty": (200_000, 1_000_000),  # 200K to 1M VND
         }
 
         # Define brands for each category
@@ -328,9 +330,10 @@ class ProductGenerator:
                 # Generate price based on category
                 min_price, max_price = self.price_ranges[category]
                 price = np.random.uniform(min_price, max_price)
+                price = round(np.random.uniform(min_price, max_price), -4)
 
-                # Cost as percentage of price (50-80%)
-                cost = price * np.random.uniform(0.5, 0.8)
+                # Cost as percentage of price (20-30%)
+                cost = price * np.random.uniform(0.2, 0.3)
 
                 # Create full product name with brand
                 full_product_name = f"{brand} {product_name}"

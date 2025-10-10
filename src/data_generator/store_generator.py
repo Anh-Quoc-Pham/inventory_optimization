@@ -1,43 +1,21 @@
-"""
-Store Generator Module
----------------------
-Generates store data for the inventory optimization system.
-Creates realistic store locations and names in Vietnam.
-"""
-
 import random
 
 import numpy as np
 import pandas as pd
 
+from src.config import RANDOM_SEED, STORE_CITIES
 from src.engine.data_model import Store
 
 
 class StoreGenerator:
-    def __init__(self, random_seed=42):
+    def __init__(self, random_seed=None):
         """Initialize with optional random seed for reproducibility."""
-        self.random_seed = random_seed
-        np.random.seed(random_seed)
-        random.seed(random_seed)
+        self.random_seed = random_seed or RANDOM_SEED
+        np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
 
-        # Define Vietnam city locations
-        self.cities = {
-            "Hanoi": {
-                "lat_range": (20.9, 21.1),
-                "lon_range": (105.7, 105.9),
-                "count": 7,
-            },
-            "Da Nang": {
-                "lat_range": (16.0, 16.1),
-                "lon_range": (108.2, 108.3),
-                "count": 5,
-            },
-            "Ho Chi Minh City": {
-                "lat_range": (10.7, 10.9),
-                "lon_range": (106.6, 106.8),
-                "count": 8,
-            },
-        }
+        # Use city configuration from config
+        self.cities = STORE_CITIES
 
         # Define realistic store name patterns
         self.brand_names = [

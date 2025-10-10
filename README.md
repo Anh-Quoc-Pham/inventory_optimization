@@ -8,14 +8,12 @@ This system helps a retail chain with multiple stores to efficiently balance inv
 
 ## Key Features
 
-- **Data-driven analysis**: Analyzes sales patterns to identify excess and needed inventory
-- **Multi-algorithm approach**: Three complementary optimization engines
-  - Rule-based: Simple heuristic approach
-  - Linear programming: Optimal cost minimization
-  - Genetic algorithm: Handles complex constraints and transport cost structures
-- **Geographic optimization**: Considers physical distances and transport costs
-- **Comprehensive visualization**: Interactive maps and charts for inventory status and transfer recommendations
-- **Performance evaluation**: Compares different optimization approaches
+- **Smart Inventory Analysis**: Automatically identifies excess and needed inventory using sales patterns
+- **Multiple Optimization Algorithms**:
+  - Rule-based: Quick, simple heuristic approach
+  - Genetic algorithm: Advanced optimization for complex scenarios
+- **Transport Cost Optimization**: Minimizes shipping costs by considering distances
+- **Simplified Results**: Focus on actionable insights with 4 essential output files
 
 ## Architecture
 
@@ -38,7 +36,6 @@ src/
 │   ├── data_model.py            # Core data model classes
 │   ├── analyzer.py              # Analyzes inventory status
 │   ├── rule_based.py            # Rule-based optimization
-│   ├── linear_programming.py    # Linear programming optimization
 │   ├── genetic_algorithm.py     # Genetic algorithm optimization
 │   └── visualizer.py            # Visualization functions
 │
@@ -48,6 +45,7 @@ src/
 ## Installation
 
 1. Clone the repository:
+
    ```
    git clone https://github.com/your-username/inventory-transfer-optimization.git
    cd inventory-transfer-optimization
@@ -60,34 +58,43 @@ src/
    pip install -r requirements.txt
    ```
 
-## Usage
+## Quick Start
 
-### Generating Mock Data
+### 1. Generate Data & Run Optimization (One Command)
 
-To generate realistic mock data for testing the system:
-
-```
-python -m src.main --generate-data --products 100 --days 365
+```bash
+python src/main.py --generate-data --all
 ```
 
-This will create synthetic data for stores, products, sales, and inventory in the `data` directory.
+This creates sample data and runs optimization with both algorithms.
 
-### Running Optimization
+### 2. Check Your Results
 
-To analyze inventory status and run optimizations:
+After running, you'll find **4 essential files** in the `results` folder:
 
+- 📋 `EXECUTIVE_SUMMARY.txt` - Your main report
+- 📈 `INVENTORY_OVERVIEW.png` - Visual dashboard
+- 📝 `TRANSFER_PLAN.csv` - Actionable transfer list
+- 📄 `TRANSFER_SUMMARY.txt` - Quick implementation guide
+
+### 3. Clean Up (Optional)
+
+```bash
+python cleanup_results.py
 ```
-python -m src.main --all
-```
 
-This will run all three optimization algorithms and generate visualizations.
+Removes complex/unnecessary files, keeps only the 4 essential outputs.
 
-Alternatively, you can run specific optimization methods:
+## 📖 Detailed Usage
 
-```
-python -m src.main --rule-based
-python -m src.main --lp
-python -m src.main --ga
+### Individual Algorithm Testing
+
+```bash
+# Rule-based only (fast)
+python src/main.py --rule-based
+
+# Genetic algorithm only (more thorough)
+python src/main.py --ga
 ```
 
 ### Command Line Arguments
@@ -117,10 +124,12 @@ To use the system with real data, replace the data generation step with data imp
 The system generates several outputs:
 
 1. **Analysis Results**:
+
    - Inventory status analysis
    - Excess and needed inventory identification
 
 2. **Transfer Recommendations**:
+
    - Detailed transfer plans from each algorithm
    - Impact analysis showing expected improvements
 
@@ -133,28 +142,10 @@ All outputs are saved to the specified results and visualization directories.
 
 ## Performance Comparison
 
-The three optimization approaches offer different trade-offs:
+The two optimization approaches offer different trade-offs:
 
-- **Rule-based**: Fastest execution, intuitive results, but sub-optimal solutions
-- **Linear Programming**: Guaranteed optimal cost solutions, but limited to linear constraints
-- **Genetic Algorithm**: Handles complex non-linear costs and constraints, but longer execution time
-
-Typical performance improvements:
-- 20-35% reduction in excess inventory
-- 30-40% reduction in transport costs
-- 20-30% improvement in inventory turnover
-
-## Requirements
-
-- Python 3.8+
-- NumPy
-- Pandas
-- Matplotlib
-- Seaborn
-- Folium
-- PuLP
-- DEAP
-- Tqdm
+- **Rule-based**: Fastest execution, intuitive results, good for simple scenarios
+- **Genetic Algorithm**: Advanced optimization for complex scenarios with multiple constraints
 
 ## License
 

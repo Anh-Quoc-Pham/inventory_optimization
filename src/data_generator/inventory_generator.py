@@ -3,42 +3,55 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
+from src.config import (
+    EXCESS_PERCENT,
+    MAX_INVENTORY_DAYS,
+    MIN_INVENTORY_DAYS,
+    RANDOM_SEED,
+    SHORTAGE_PERCENT,
+)
+
 
 class InventoryGenerator:
-    def __init__(self, sales_df, random_seed=42):
+    def __init__(self, sales_df, random_seed=None):
         """
         Initialize with sales data to base inventory on.
 
         Args:
             sales_df: DataFrame containing sales records
-            random_seed: Optional random seed for reproducibility
+            random_seed: Optional random seed for reproducibility (uses config default if None)
         """
         self.sales_df = sales_df
-        self.random_seed = random_seed
-        np.random.seed(random_seed)
+        self.random_seed = random_seed or RANDOM_SEED
+        np.random.seed(self.random_seed)
 
     def generate_inventory_data(
         self,
         output_path=None,
-        min_days=7,
-        max_days=30,
-        excess_percent=1,
-        shortage_percent=60,
+        min_days=None,
+        max_days=None,
+        excess_percent=None,
+        shortage_percent=None,
     ):
+        """Use config defaults if not provided."""
+        min_days = min_days or MIN_INVENTORY_DAYS
+        max_days = max_days or MAX_INVENTORY_DAYS
+        excess_percent = excess_percent or EXCESS_PERCENT
+        shortage_percent = shortage_percent or SHORTAGE_PERCENT
         """
         Generate current inventory data based on sales patterns.
-        Deliberately creates balanced imbalances with a good ratio between
-        excess and needed inventory.
+        Creates realistic inventory imbalances with balanced excess-to-needed ratios
+        for effective optimization scenarios.
 
         Args:
             output_path: Optional path to save inventory data to CSV
             min_days: Minimum days of inventory (below this is considered shortage)
             max_days: Maximum days of inventory (above this is considered excess)
-            excess_percent: Percentage of items to have excess inventory
-            shortage_percent: Percentage of items to have shortage
+            excess_percent: Percentage of items to have excess inventory (default: 25%)
+            shortage_percent: Percentage of items to have shortage (default: 25%)
 
         Returns:
-            DataFrame containing current inventory levels
+            DataFrame containing current inventory levels with balanced imbalances
         """
         print("Generating inventory data with balanced imbalances...")
 
@@ -92,27 +105,35 @@ class InventoryGenerator:
             # Determine how many stores will have excess, shortage, or balanced inventory
             num_stores_with_product = len(product_sales)
 
-            # Ensure we have meaningful imbalances with sufficient stores
-            if num_stores_with_product >= 5:
-                # For products sold in many stores, create a more diverse distribution
-                num_excess = max(2, int(num_stores_with_product * excess_percent / 100))
+            # Create balanced distribution across store types
+            if num_stores_with_product >= 4:
+                # Calculate number of stores for each status ensuring balance
+                num_excess = max(1, int(num_stores_with_product * excess_percent / 100))
                 num_shortage = max(
-                    2, int(num_stores_with_product * shortage_percent / 100)
+                    1, int(num_stores_with_product * shortage_percent / 100)
                 )
 
-                # Ensure we don't exceed the total number of stores
-                if num_excess + num_shortage > num_stores_with_product:
-                    reduction = (num_excess + num_shortage) - num_stores_with_product
-                    # Reduce both proportionally
-                    num_excess = max(1, num_excess - reduction // 2)
-                    num_shortage = max(1, num_shortage - (reduction - reduction // 2))
+                # Ensure we don't exceed total stores and maintain balance
+                total_imbalanced = num_excess + num_shortage
+                if total_imbalanced > num_stores_with_product * 0.7:
+                    # Scale down to maintain realistic ratios
+                    scale_factor = (num_stores_with_product * 0.7) / total_imbalanced
+                    num_excess = max(1, int(num_excess * scale_factor))
+                    num_shortage = max(1, int(num_shortage * scale_factor))
 
                 num_balanced = num_stores_with_product - num_excess - num_shortage
+                num_balanced = max(0, num_balanced)  # Ensure non-negative
             else:
-                # For products sold in few stores, ensure at least one excess and one shortage
-                num_excess = 1
-                num_shortage = 1
-                num_balanced = num_stores_with_product - 2
+                # For products sold in few stores, create simple distribution
+                if num_stores_with_product >= 3:
+                    num_excess = 1
+                    num_shortage = 1
+                    num_balanced = num_stores_with_product - 2
+                else:
+                    # Very few stores - create minimal imbalance
+                    num_excess = 1 if num_stores_with_product > 1 else 0
+                    num_shortage = 1 if num_stores_with_product > num_excess else 0
+                    num_balanced = num_stores_with_product - num_excess - num_shortage
 
             # Get store IDs for this product
             store_ids = product_sales["store_id"].values
@@ -136,25 +157,27 @@ class InventoryGenerator:
                     1, row["avg_daily_sales"]
                 )  # Ensure at least 1 unit per day
 
-                # Assign inventory based on store category
+                # Assign inventory based on store category with more moderate imbalances
                 if store_id in excess_stores:
-                    # Create significant excess (40-70 days of inventory)
-                    days_of_stock = np.random.uniform(max_days * 1.5, max_days * 2)
+                    # Create moderate excess (35-50 days of inventory)
+                    days_of_stock = np.random.uniform(max_days * 1.2, max_days * 1.7)
                     inventory = int(avg_daily_sales * days_of_stock)
-                    excess_units = int(inventory - (max_days * avg_daily_sales))
+                    excess_units = max(0, int(inventory - (max_days * avg_daily_sales)))
                     total_excess_units += excess_units
 
                 elif store_id in shortage_stores:
-                    # Create significant shortage (1-5 days of inventory)
-                    days_of_stock = np.random.uniform(1, min_days * 0.7)
+                    # Create moderate shortage (2-6 days of inventory)
+                    days_of_stock = np.random.uniform(min_days * 0.3, min_days * 0.8)
                     inventory = max(1, int(avg_daily_sales * days_of_stock))
-                    shortage_units = int((min_days * avg_daily_sales) - inventory)
+                    shortage_units = max(
+                        0, int((min_days * avg_daily_sales) - inventory)
+                    )
                     total_shortage_units += shortage_units
 
                 else:
-                    # Balanced (close to min_days but just above)
-                    balanced_min = min_days * 1.1
-                    balanced_max = min_days * 1.5
+                    # Balanced inventory (optimal range)
+                    balanced_min = min_days * 1.0
+                    balanced_max = max_days * 0.9
                     days_of_stock = np.random.uniform(balanced_min, balanced_max)
                     inventory = int(avg_daily_sales * days_of_stock)
 
@@ -297,7 +320,7 @@ if __name__ == "__main__":
     # Generate inventory data with balanced imbalances
     generator = InventoryGenerator(sales_df)
     inventory_df = generator.generate_inventory_data(
-        "data/inventory_data.csv", excess_percent=1, shortage_percent=60
+        "data/inventory_data.csv", excess_percent=25, shortage_percent=25
     )
 
     # Print summary statistics

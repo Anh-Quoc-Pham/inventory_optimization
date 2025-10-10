@@ -1,10 +1,3 @@
-"""
-Sales Generator Module
---------------------
-Generates realistic sales data for the inventory optimization system.
-Creates different sales patterns based on store location and product category.
-"""
-
 import datetime as dt
 import random
 
@@ -12,22 +5,24 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from src.config import RANDOM_SEED
+
 
 class SalesGenerator:
-    def __init__(self, stores, products, random_seed=2025):
+    def __init__(self, stores, products, random_seed=None):
         """
         Initialize the sales generator with store and product data.
 
         Args:
             stores: List of Store objects
             products: List of Product objects
-            random_seed: Optional random seed for reproducibility
+            random_seed: Optional random seed for reproducibility (uses config default if None)
         """
         self.stores = stores
         self.products = products
-        self.random_seed = random_seed
-        np.random.seed(random_seed)
-        random.seed(random_seed)
+        self.random_seed = random_seed or RANDOM_SEED
+        np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
 
     def generate_sales_data(self, days=365, output_path=None):
         """

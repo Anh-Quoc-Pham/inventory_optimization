@@ -1,13 +1,24 @@
-"""
-Rule-Based Optimization Engine
------------------------------------
-Implements a rule-based approach for inventory transfer optimization.
-Uses predefined rules and heuristics to generate transfer recommendations.
-Fixes handling of store IDs for distance and cost lookups.
-"""
+import sys
+import time
+from pathlib import Path
+
+# Add project root to path for direct execution
+if __name__ == "__main__" or "src.engine" not in sys.modules:
+    project_root = Path(__file__).parent.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 import numpy as np
 import pandas as pd
+
+from src.config import (
+    BASE_TRANSPORT_COST_PER_KM,
+    DISTANCE_WEIGHT,
+    EXCESS_WEIGHT,
+    MAX_TRANSFER_DISTANCE_KM,
+    NEEDED_WEIGHT,
+)
+from src.utils.logger import get_optimization_logger
 
 
 class RuleBasedOptimizer:
@@ -22,6 +33,7 @@ class RuleBasedOptimizer:
         self.distance_matrix = distance_matrix
         self.transport_cost_matrix = transport_cost_matrix
         self.transfer_plan = None
+        self.logger_system = get_optimization_logger()
 
     def load_matrices(self, distance_path, cost_path):
         """
@@ -56,21 +68,56 @@ class RuleBasedOptimizer:
         Returns:
             DataFrame containing transfer recommendations
         """
+        # Start timing and logging
+        start_time = time.time()
+
+        parameters = {
+            "excess_items": len(excess_inventory) if not excess_inventory.empty else 0,
+            "needed_items": len(needed_inventory) if not needed_inventory.empty else 0,
+            "algorithm": "Rule-Based Optimization",
+        }
+
+        self.logger_system.log_execution_start("rule_based_optimization", parameters)
+
         print("Generating rule-based transfer plan...")
+        self.logger_system.log_progress(
+            "rule_based_optimization", "Starting rule-based transfer plan generation..."
+        )
 
         if excess_inventory.empty or needed_inventory.empty:
-            print("No excess or needed inventory found. No transfers needed.")
+            message = "No excess or needed inventory found. No transfers needed."
+            print(message)
+            self.logger_system.log_progress("rule_based_optimization", message)
             self.transfer_plan = pd.DataFrame()
+
+            # Log completion
+            execution_time = time.time() - start_time
+            results = {
+                "transfers_generated": 0,
+                "reason": "No excess or needed inventory",
+            }
+            self.logger_system.log_execution_end(
+                "rule_based_optimization", execution_time, results
+            )
             return self.transfer_plan
 
         # Create a list to store transfer recommendations
         transfers = []
+
+        self.logger_system.log_progress(
+            "rule_based_optimization", "Sorting excess and needed inventory..."
+        )
 
         # Sort excess inventory by excess_units (descending)
         excess_sorted = excess_inventory.sort_values("excess_units", ascending=False)
 
         # Sort needed inventory by needed_units (descending)
         needed_sorted = needed_inventory.sort_values("needed_units", ascending=False)
+
+        self.logger_system.log_progress(
+            "rule_based_optimization",
+            f"Processing {len(excess_sorted)} excess items and {len(needed_sorted)} needed items",
+        )
 
         # Track how much has been transferred from each excess item
         transferred_from = {}
@@ -210,13 +257,61 @@ class RuleBasedOptimizer:
             total_cost = self.transfer_plan["transport_cost"].sum()
             avg_cost_per_unit = total_cost / total_units if total_units > 0 else 0
 
-            print(f"Rule-Based Transfer Plan Summary:")
+            summary_msg = f"Rule-Based Transfer Plan Summary:"
+            print(summary_msg)
             print(f"- Total transfers: {len(self.transfer_plan)}")
             print(f"- Total units to transfer: {total_units}")
             print(f"- Total transport cost: {total_cost:,.0f} VND")
             print(f"- Average cost per unit: {avg_cost_per_unit:,.0f} VND")
+
+            # Log results
+            self.logger_system.log_progress("rule_based_optimization", summary_msg)
+            self.logger_system.log_progress(
+                "rule_based_optimization", f"Total transfers: {len(self.transfer_plan)}"
+            )
+            self.logger_system.log_progress(
+                "rule_based_optimization", f"Total units to transfer: {total_units}"
+            )
+            self.logger_system.log_progress(
+                "rule_based_optimization",
+                f"Total transport cost: {total_cost:,.0f} VND",
+            )
+            self.logger_system.log_progress(
+                "rule_based_optimization",
+                f"Average cost per unit: {avg_cost_per_unit:,.0f} VND",
+            )
+
         else:
-            print("No transfers recommended.")
+            no_transfers_msg = "No transfers recommended."
+            print(no_transfers_msg)
+            self.logger_system.log_progress("rule_based_optimization", no_transfers_msg)
+
+        # Log execution completion
+        execution_time = time.time() - start_time
+        results = {
+            "transfers_generated": len(self.transfer_plan),
+            "total_units": (
+                self.transfer_plan["units"].sum() if not self.transfer_plan.empty else 0
+            ),
+            "total_cost": (
+                self.transfer_plan["transport_cost"].sum()
+                if not self.transfer_plan.empty
+                else 0
+            ),
+            "avg_cost_per_unit": (
+                (
+                    self.transfer_plan["transport_cost"].sum()
+                    / self.transfer_plan["units"].sum()
+                )
+                if not self.transfer_plan.empty
+                and self.transfer_plan["units"].sum() > 0
+                else 0
+            ),
+        }
+
+        self.logger_system.log_execution_end(
+            "rule_based_optimization", execution_time, results
+        )
 
         return self.transfer_plan
 
@@ -253,11 +348,18 @@ class RuleBasedOptimizer:
 
 if __name__ == "__main__":
     import os
+    from pathlib import Path
 
     from src.engine.analyzer import InventoryAnalyzer
 
-    # Check if data files exist
-    data_dir = "data"
+    # Check if data files exist (relative to project root)
+    project_root = Path(__file__).parent.parent.parent
+    data_dir = project_root / "data"
+    results_dir = project_root / "results"
+
+    # Create results directory if it doesn't exist
+    results_dir.mkdir(exist_ok=True)
+
     required_files = [
         "sales_data.csv",
         "inventory_data.csv",
@@ -265,26 +367,27 @@ if __name__ == "__main__":
         "transport_cost_matrix.csv",
     ]
 
+    print("Checking required data files...")
     for file in required_files:
-        if not os.path.exists(os.path.join(data_dir, file)):
+        if not (data_dir / file).exists():
             print(f"Required file {file} not found. Please run data generator first.")
             exit(1)
+        else:
+            print(f"✓ {file}")
 
     # Create analyzer
     analyzer = InventoryAnalyzer()
 
     # Load data
     analyzer.load_data(
-        sales_path=os.path.join(data_dir, "sales_data.csv"),
-        inventory_path=os.path.join(data_dir, "inventory_data.csv"),
+        sales_path=str(data_dir / "sales_data.csv"),
+        inventory_path=str(data_dir / "inventory_data.csv"),
         stores_path=(
-            os.path.join(data_dir, "stores.csv")
-            if os.path.exists(os.path.join(data_dir, "stores.csv"))
-            else None
+            str(data_dir / "stores.csv") if (data_dir / "stores.csv").exists() else None
         ),
         products_path=(
-            os.path.join(data_dir, "products.csv")
-            if os.path.exists(os.path.join(data_dir, "products.csv"))
+            str(data_dir / "products.csv")
+            if (data_dir / "products.csv").exists()
             else None
         ),
     )
@@ -300,19 +403,17 @@ if __name__ == "__main__":
 
     # Load matrices
     optimizer.load_matrices(
-        distance_path=os.path.join(data_dir, "distance_matrix.csv"),
-        cost_path=os.path.join(data_dir, "transport_cost_matrix.csv"),
+        distance_path=str(data_dir / "distance_matrix.csv"),
+        cost_path=str(data_dir / "transport_cost_matrix.csv"),
     )
 
     # Generate transfer plan
     transfer_plan = optimizer.optimize(excess_df, needed_df)
 
     # Add store and product names if data available
-    if os.path.exists(os.path.join(data_dir, "stores.csv")) and os.path.exists(
-        os.path.join(data_dir, "products.csv")
-    ):
-        stores_df = pd.read_csv(os.path.join(data_dir, "stores.csv"))
-        products_df = pd.read_csv(os.path.join(data_dir, "products.csv"))
+    if (data_dir / "stores.csv").exists() and (data_dir / "products.csv").exists():
+        stores_df = pd.read_csv(str(data_dir / "stores.csv"))
+        products_df = pd.read_csv(str(data_dir / "products.csv"))
         optimizer.add_store_product_names(stores_df, products_df)
 
     # Evaluate impact
@@ -320,6 +421,6 @@ if __name__ == "__main__":
         impact_df, _ = analyzer.evaluate_plan_impact(transfer_plan)
 
         # Save transfer plan
-        output_path = os.path.join(data_dir, "rule_based_transfers.csv")
+        output_path = str(results_dir / "rule_based_transfers.csv")
         transfer_plan.to_csv(output_path, index=False)
         print(f"Transfer plan saved to {output_path}")

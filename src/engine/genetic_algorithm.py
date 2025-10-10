@@ -1,22 +1,44 @@
-"""
-Genetic Algorithm Optimization Engine
-------------------------------------------
-Implements a genetic algorithm approach for inventory transfer optimization.
-Handles complex constraints and non-linear cost functions.
-Fixes handling of store IDs for distance and cost lookups.
-"""
-
 import random
+import sys
+import time
+from pathlib import Path
+
+# Add project root to path for direct execution
+if __name__ == "__main__" or "src.engine" not in sys.modules:
+    project_root = Path(__file__).parent.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 import numpy as np
 import pandas as pd
-from deap import algorithms, base, creator, tools
-from tqdm import tqdm
+
+from src.config import RANDOM_SEED, get_ga_config
+from src.utils.logger import get_optimization_logger
+
+
+class Individual:
+    """
+    Represents a single solution (individual) in the genetic algorithm.
+    Each individual contains a transfer plan and its fitness score.
+    """
+
+    def __init__(self, transfer_plan=None):
+        self.transfer_plan = (
+            transfer_plan or []
+        )  # List of transfers: (from_store, product_id, to_store, units)
+        self.fitness = float("inf")  # Lower is better (minimization problem)
+
+    def copy(self):
+        """Create a deep copy of this individual."""
+        new_individual = Individual()
+        new_individual.transfer_plan = self.transfer_plan.copy()
+        new_individual.fitness = self.fitness
+        return new_individual
 
 
 class GeneticAlgorithmOptimizer:
     def __init__(
-        self, distance_matrix=None, transport_cost_matrix=None, random_seed=42
+        self, distance_matrix=None, transport_cost_matrix=None, random_seed=None
     ):
         """
         Initialize the genetic algorithm optimization engine.
@@ -24,18 +46,19 @@ class GeneticAlgorithmOptimizer:
         Args:
             distance_matrix: Matrix of distances between stores
             transport_cost_matrix: Matrix of transport costs between stores
-            random_seed: Random seed for reproducibility
+            random_seed: Random seed for reproducibility (uses config default if None)
         """
         self.distance_matrix = distance_matrix
         self.transport_cost_matrix = transport_cost_matrix
         self.transfer_plan = None
-        self.random_seed = random_seed
+        self.random_seed = random_seed or RANDOM_SEED
         self.best_solution = None
         self.best_fitness = None
+        self.logger_system = get_optimization_logger()
 
         # Set random seed
-        random.seed(random_seed)
-        np.random.seed(random_seed)
+        random.seed(self.random_seed)
+        np.random.seed(self.random_seed)
 
     def load_matrices(self, distance_path, cost_path):
         """
@@ -63,478 +86,757 @@ class GeneticAlgorithmOptimizer:
         self,
         excess_inventory,
         needed_inventory,
-        population_size=100,
-        num_generations=50,
-        crossover_prob=0.7,
-        mutation_prob=0.2,
-        tournament_size=3,
-        verbose=True,
+        population_size=None,
+        num_generations=None,
+        crossover_prob=None,
+        mutation_prob=None,
+        tournament_size=None,
+        verbose=False,
     ):
+        """Use config defaults if parameters not provided."""
+        # Get config defaults
+        config = get_ga_config()
+        population_size = population_size or config["population_size"]
+        num_generations = num_generations or config["num_generations"]
+        crossover_prob = crossover_prob or config["crossover_prob"]
+        mutation_prob = mutation_prob or config["mutation_prob"]
+        tournament_size = tournament_size or config["tournament_size"]
         """
-        Generate a transfer plan using a genetic algorithm approach.
+        Run genetic algorithm optimization to find the best transfer plan.
+
+        This is the main optimization function that mimics natural evolution:
+        1. Population: A set of candidate solutions (transfer plans)
+        2. Selection: Choose best individuals for reproduction (tournament selection)
+        3. Crossover: Combine parent solutions to create offspring
+        4. Mutation: Random changes to maintain diversity
+        5. Evolution: Repeat over generations to improve solutions
 
         Args:
             excess_inventory: DataFrame containing excess inventory
             needed_inventory: DataFrame containing needed inventory
-            population_size: Size of the population (default: 100)
-            num_generations: Number of generations to evolve (default: 50)
-            crossover_prob: Crossover probability (default: 0.7)
-            mutation_prob: Mutation probability (default: 0.2)
-            tournament_size: Tournament size for selection (default: 3)
-            verbose: Whether to show progress (default: True)
+            population_size: Number of individuals in each generation
+            num_generations: Number of evolution cycles
+            crossover_prob: Probability of crossover (0.0 to 1.0)
+            mutation_prob: Probability of mutation (0.0 to 1.0)
+            tournament_size: Number of individuals in tournament selection
+            verbose: Whether to print generation statistics
+
+        Returns:
+            DataFrame containing optimal transfer plan
+        """
+        # Start timing and logging
+        start_time = time.time()
+
+        parameters = {
+            "excess_items": len(excess_inventory) if not excess_inventory.empty else 0,
+            "needed_items": len(needed_inventory) if not needed_inventory.empty else 0,
+            "population_size": population_size,
+            "num_generations": num_generations,
+            "crossover_probability": crossover_prob,
+            "mutation_probability": mutation_prob,
+            "tournament_size": tournament_size,
+            "algorithm": "Genetic Algorithm Optimization",
+        }
+
+        self.logger_system.log_execution_start(
+            "genetic_algorithm_optimization", parameters
+        )
+
+        print(f"Starting Genetic Algorithm Optimization...")
+        print(f"Population: {population_size}, Generations: {num_generations}")
+
+        self.logger_system.log_progress(
+            "genetic_algorithm_optimization",
+            "Starting Genetic Algorithm Optimization...",
+        )
+        self.logger_system.log_progress(
+            "genetic_algorithm_optimization",
+            f"Configuration: Population={population_size}, Generations={num_generations}, Crossover={crossover_prob}, Mutation={mutation_prob}",
+        )
+        """
+        Generate a transfer plan using a simple genetic algorithm from scratch.
+
+        This implementation demonstrates the core GA concepts:
+        1. Population: A set of candidate solutions (transfer plans)
+        2. Selection: Choose best individuals to reproduce
+        3. Crossover: Combine two parents to create offspring
+        4. Mutation: Random changes to maintain diversity
+        5. Evolution: Repeat over generations to improve solutions
+
+        Args:
+            excess_inventory: DataFrame containing excess inventory
+            needed_inventory: DataFrame containing needed inventory
+            population_size: Number of individuals in each generation
+            num_generations: Number of evolution cycles
+            crossover_prob: Probability of crossover between parents
+            mutation_prob: Probability of mutation in offspring
+            tournament_size: Number of individuals in tournament selection
+            verbose: Whether to show progress information
 
         Returns:
             DataFrame containing transfer recommendations
         """
-        print("Generating genetic algorithm-based transfer plan...")
+        print("Starting Genetic Algorithm Optimization...")
+        print(f"Population: {population_size}, Generations: {num_generations}")
 
-        # If either of these is empty, there's nothing to optimize
+        # Validate inputs
         if excess_inventory.empty or needed_inventory.empty:
-            print("No excess or needed inventory found. No transfers needed.")
+            message = "No excess or needed inventory found. No transfers needed."
+            print(message)
+            self.logger_system.log_progress("genetic_algorithm_optimization", message)
+            self.transfer_plan = pd.DataFrame()
+
+            # Log completion
+            execution_time = time.time() - start_time
+            results = {
+                "transfers_generated": 0,
+                "reason": "No excess or needed inventory",
+            }
+            self.logger_system.log_execution_end(
+                "genetic_algorithm_optimization", execution_time, results
+            )
+            return self.transfer_plan
+
+        # Store data for GA operations
+        self.excess_inventory = excess_inventory
+        self.needed_inventory = needed_inventory
+
+        # Find products that have both excess and shortage
+        excess_products = set(excess_inventory["product_id"].unique())
+        needed_products = set(needed_inventory["product_id"].unique())
+        self.valid_products = list(excess_products & needed_products)
+
+        if not self.valid_products:
+            print("No products with both excess and shortage found.")
             self.transfer_plan = pd.DataFrame()
             return self.transfer_plan
 
-        # Group by product to match supply and demand
-        excess_by_product = excess_inventory.groupby("product_id")["excess_units"].sum()
-        needed_by_product = needed_inventory.groupby("product_id")["needed_units"].sum()
+        print(f"Found {len(self.valid_products)} products for optimization")
 
-        # Get products that have both excess and need
-        valid_products = list(
-            set(excess_by_product.index) & set(needed_by_product.index)
+        # Step 1: Initialize Population
+        print("\nStep 1: Creating initial population...")
+        self.logger_system.log_progress(
+            "genetic_algorithm_optimization", "Step 1: Creating initial population..."
+        )
+        population = self._create_initial_population(population_size)
+
+        # Step 2: Evaluate initial population
+        print("Step 2: Evaluating initial fitness...")
+        self._evaluate_population(population)
+
+        # Track statistics
+        generation_stats = []
+        best_individual = min(population, key=lambda x: x.fitness)
+
+        if verbose:
+            fitness_values = [ind.fitness for ind in population]
+            min_fitness = min(fitness_values)
+            avg_fitness = sum(fitness_values) / len(fitness_values)
+            generation_stats.append((0, min_fitness, avg_fitness))
+            print(f"Generation 0: Best={min_fitness:,.0f}, Avg={avg_fitness:,.0f}")
+
+        # Step 3: Evolution Loop
+        print(f"\nStep 3: Evolution over {num_generations} generations...")
+        self.logger_system.log_progress(
+            "genetic_algorithm_optimization",
+            f"Step 3: Evolution over {num_generations} generations...",
         )
 
-        if not valid_products:
-            print("No products with both excess and need found.")
-            self.transfer_plan = pd.DataFrame()
-            return self.transfer_plan
+        for generation in range(1, num_generations + 1):
+            # Selection: Choose parents for reproduction
+            parents = self._selection(population, tournament_size)
 
-        # Filter to valid products
-        excess_df = excess_inventory[
-            excess_inventory["product_id"].isin(valid_products)
-        ].copy()
-        needed_df = needed_inventory[
-            needed_inventory["product_id"].isin(valid_products)
-        ].copy()
+            # Create new generation
+            offspring = []
 
-        # Create lookup for excess and needed items
-        excess_items = []
-        for _, row in excess_df.iterrows():
-            excess_items.append(
-                (row["store_id"], row["product_id"], row["excess_units"])
+            # Crossover: Create children by combining parents
+            for i in range(0, len(parents), 2):
+                parent1 = parents[i]
+                parent2 = parents[i + 1] if i + 1 < len(parents) else parents[0]
+
+                if random.random() < crossover_prob:
+                    child1, child2 = self._crossover(parent1, parent2)
+                else:
+                    child1, child2 = parent1.copy(), parent2.copy()
+
+                offspring.extend([child1, child2])
+
+            # Mutation: Random changes to maintain diversity
+            for individual in offspring:
+                if random.random() < mutation_prob:
+                    self._mutate(individual)
+
+            # Ensure population size
+            offspring = offspring[:population_size]
+
+            # Evaluate new generation
+            self._evaluate_population(offspring)
+
+            # Elitism: Keep the best individual from previous generation
+            current_best = min(offspring, key=lambda x: x.fitness)
+            if best_individual.fitness < current_best.fitness:
+                # Replace worst individual with previous best
+                worst_idx = max(
+                    range(len(offspring)), key=lambda i: offspring[i].fitness
+                )
+                offspring[worst_idx] = best_individual
+            else:
+                best_individual = current_best
+
+            # Replace population
+            population = offspring
+
+            # Track statistics
+            if verbose:
+                fitness_values = [ind.fitness for ind in population]
+                min_fitness = min(fitness_values)
+                avg_fitness = sum(fitness_values) / len(fitness_values)
+                generation_stats.append((generation, min_fitness, avg_fitness))
+
+                if generation % 10 == 0 or generation == num_generations:
+                    generation_msg = f"Generation {generation}: Best={min_fitness:,.0f}, Avg={avg_fitness:,.0f}"
+                    print(generation_msg)
+                    self.logger_system.log_progress(
+                        "genetic_algorithm_optimization", generation_msg
+                    )
+
+        # Step 4: Extract best solution
+        print("\nStep 4: Extracting best solution...")
+        self.logger_system.log_progress(
+            "genetic_algorithm_optimization", "Step 4: Extracting best solution..."
+        )
+        best_individual = min(population, key=lambda x: x.fitness)
+        self.best_solution = best_individual
+        self.best_fitness = best_individual.fitness
+
+        # Convert to DataFrame
+        self.transfer_plan = self._convert_to_dataframe(best_individual)
+
+        # Print summary
+        if not self.transfer_plan.empty:
+            total_units = self.transfer_plan["units"].sum()
+            total_cost = self.transfer_plan["transport_cost"].sum()
+            avg_cost_per_unit = total_cost / total_units if total_units > 0 else 0
+
+            summary_msg = f"Genetic Algorithm Results:"
+            print(f"\n{summary_msg}")
+            print(f"   • Best fitness (total cost): {self.best_fitness:,.0f}")
+            print(f"   • Total transfers: {len(self.transfer_plan)}")
+            print(f"   • Total units to transfer: {total_units}")
+            print(f"   • Total transport cost: {total_cost:,.0f}")
+            print(f"   • Average cost per unit: {avg_cost_per_unit:,.0f}")
+
+            # Log results
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization", summary_msg
+            )
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization",
+                f"Best fitness (total cost): {self.best_fitness:,.0f}",
+            )
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization",
+                f"Total transfers: {len(self.transfer_plan)}",
+            )
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization",
+                f"Total units to transfer: {total_units}",
+            )
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization",
+                f"Total transport cost: {total_cost:,.0f}",
+            )
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization",
+                f"Average cost per unit: {avg_cost_per_unit:,.0f}",
+            )
+        else:
+            no_transfers_msg = "No beneficial transfers found by genetic algorithm."
+            print(no_transfers_msg)
+            self.logger_system.log_progress(
+                "genetic_algorithm_optimization", no_transfers_msg
             )
 
-        needed_items = []
-        for _, row in needed_df.iterrows():
-            needed_items.append(
-                (row["store_id"], row["product_id"], row["needed_units"])
+        # Log execution completion
+        execution_time = time.time() - start_time
+        results = {
+            "transfers_generated": len(self.transfer_plan),
+            "best_fitness": (
+                float(self.best_fitness) if self.best_fitness is not None else 0
+            ),
+            "total_units": (
+                self.transfer_plan["units"].sum() if not self.transfer_plan.empty else 0
+            ),
+            "total_cost": (
+                self.transfer_plan["transport_cost"].sum()
+                if not self.transfer_plan.empty
+                else 0
+            ),
+            "avg_cost_per_unit": (
+                (
+                    self.transfer_plan["transport_cost"].sum()
+                    / self.transfer_plan["units"].sum()
+                )
+                if not self.transfer_plan.empty
+                and self.transfer_plan["units"].sum() > 0
+                else 0
+            ),
+            "generations_completed": num_generations,
+            "population_size_used": population_size,
+        }
+
+        self.logger_system.log_execution_end(
+            "genetic_algorithm_optimization", execution_time, results
+        )
+
+        return self.transfer_plan
+
+    def _create_initial_population(self, population_size):
+        """
+        Create the initial population of random solutions.
+        Each individual represents a possible transfer plan.
+        """
+        population = []
+
+        for _ in range(population_size):
+            individual = Individual()
+            individual.transfer_plan = self._create_random_solution()
+            population.append(individual)
+
+        return population
+
+    def _create_random_solution(self):
+        """
+        Create a single random transfer plan.
+        This is like having a person make random decisions about which
+        products to transfer between which stores.
+        """
+        transfer_plan = []
+
+        # For each product that has both excess and shortage
+        for product_id in self.valid_products:
+            # Get stores with excess of this product
+            excess_stores = self.excess_inventory[
+                self.excess_inventory["product_id"] == product_id
+            ].copy()
+
+            # Get stores needing this product
+            needed_stores = self.needed_inventory[
+                self.needed_inventory["product_id"] == product_id
+            ].copy()
+
+            if excess_stores.empty or needed_stores.empty:
+                continue
+
+            # Track remaining units available
+            excess_remaining = dict(
+                zip(excess_stores["store_id"], excess_stores["excess_units"])
+            )
+            needed_remaining = dict(
+                zip(needed_stores["store_id"], needed_stores["needed_units"])
             )
 
-        # Set up the genetic algorithm
-        # If creator already has FitnessMin, skip creation
-        if not hasattr(creator, "FitnessMin"):
-            creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+            # Randomly shuffle order to create variety
+            excess_list = list(excess_remaining.items())
+            needed_list = list(needed_remaining.items())
+            random.shuffle(excess_list)
+            random.shuffle(needed_list)
 
-        # If creator already has Individual, skip creation
-        if not hasattr(creator, "Individual"):
-            creator.create("Individual", list, fitness=creator.FitnessMin)
-
-        toolbox = base.Toolbox()
-
-        # Define how to generate an individual (a transfer plan)
-        def create_transfer_plan():
-            """Create a random transfer plan."""
-            transfer_plan = []
-
-            # Create a copy of excess and needed items
-            excess_copy = excess_items.copy()
-            needed_copy = needed_items.copy()
-
-            # Shuffle to introduce randomness
-            random.shuffle(excess_copy)
-            random.shuffle(needed_copy)
-
-            # Match excess to need
-            for product_id in valid_products:
-                # Filter by product
-                product_excess = [item for item in excess_copy if item[1] == product_id]
-                product_needed = [item for item in needed_copy if item[1] == product_id]
-
-                if not product_excess or not product_needed:
+            # Make random transfers
+            for need_store, need_amount in needed_list:
+                if need_amount <= 0:
                     continue
 
-                # Initialize remaining units
-                excess_remaining = {item[0]: item[2] for item in product_excess}
-                needed_remaining = {item[0]: item[2] for item in product_needed}
-
-                # For each need, try to fulfill from excess
-                for need_store, _, _ in product_needed:
-                    if needed_remaining[need_store] <= 0:
+                for excess_store, excess_amount in excess_list:
+                    if excess_store == need_store or excess_amount <= 0:
                         continue
 
-                    # Sort excess stores by distance (closest first)
-                    pairs_to_sort = [
-                        (store, product_id)
-                        for store, prod_id, _ in product_excess
-                        if prod_id == product_id and store != need_store
-                    ]
+                    # Transfer random amount (but not more than available or needed)
+                    max_transfer = min(excess_amount, need_amount)
+                    if max_transfer > 0:
+                        # Sometimes transfer full amount, sometimes partial
+                        transfer_amount = random.randint(1, max_transfer)
 
-                    # Define a key function for sorting by distance
-                    def distance_key(pair):
-                        store, _ = pair
-                        if (
-                            store in self.distance_matrix.index
-                            and need_store in self.distance_matrix.columns
-                        ):
-                            return float(self.distance_matrix.loc[store, need_store])
-                        return float("inf")  # Use infinity if distance not found
-
-                    # Sort by distance
-                    sorted_excess = sorted(pairs_to_sort, key=distance_key)
-
-                    # Try to fulfill from each excess store
-                    for excess_store, _ in sorted_excess:
-                        if excess_store == need_store:  # Skip self-transfers
-                            continue
-
-                        if excess_remaining[excess_store] <= 0:
-                            continue
-
-                        # Calculate units to transfer
-                        transfer_units = min(
-                            excess_remaining[excess_store], needed_remaining[need_store]
+                        transfer_plan.append(
+                            {
+                                "from_store": excess_store,
+                                "to_store": need_store,
+                                "product_id": product_id,
+                                "units": transfer_amount,
+                            }
                         )
 
-                        if transfer_units > 0:
-                            # Add to transfer plan
-                            transfer_plan.append(
-                                (excess_store, product_id, need_store, transfer_units)
-                            )
+                        # Update remaining amounts
+                        excess_remaining[excess_store] -= transfer_amount
+                        needed_remaining[need_store] -= transfer_amount
+                        need_amount -= transfer_amount
 
-                            # Update remaining units
-                            excess_remaining[excess_store] -= transfer_units
-                            needed_remaining[need_store] -= transfer_units
+                        # Update the list item too
+                        for i, (store, amount) in enumerate(excess_list):
+                            if store == excess_store:
+                                excess_list[i] = (store, excess_remaining[excess_store])
+                                break
 
-                        # Check if need is fulfilled
-                        if needed_remaining[need_store] <= 0:
+                        if need_amount <= 0:
                             break
 
-            return transfer_plan
+        return transfer_plan
 
-        # Register how to create individuals
-        toolbox.register(
-            "individual", tools.initIterate, creator.Individual, create_transfer_plan
-        )
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    def _evaluate_population(self, population):
+        """
+        Calculate the fitness (total cost) for each individual in the population.
+        Lower cost = better fitness.
+        """
+        for individual in population:
+            individual.fitness = self._calculate_fitness(individual.transfer_plan)
 
-        # Define the evaluation function
-        def evaluate_transfer_plan(individual):
-            """Evaluate the cost of a transfer plan."""
-            total_cost = 0
+    def _calculate_fitness(self, transfer_plan):
+        """
+        Calculate the total cost of a transfer plan.
+        This is our fitness function - we want to minimize total transport cost.
+        """
+        total_cost = 0
 
-            for from_store, product_id, to_store, units in individual:
-                # Calculate transport cost directly from the matrix
-                if (
-                    from_store in self.transport_cost_matrix.index
-                    and to_store in self.transport_cost_matrix.columns
-                ):
-                    cost_per_unit = float(
-                        self.transport_cost_matrix.loc[from_store, to_store]
-                    )
-                    total_cost += cost_per_unit * units
-                else:
-                    # Fallback to distance-based cost if transport cost not available
-                    if (
-                        from_store in self.distance_matrix.index
-                        and to_store in self.distance_matrix.columns
-                    ):
-                        distance = float(self.distance_matrix.loc[from_store, to_store])
-                        total_cost += distance * 10000 * units  # Basic cost estimate
-                    else:
-                        # High cost for unknown distances
-                        total_cost += 1000000 * units
+        for transfer in transfer_plan:
+            from_store = transfer["from_store"]
+            to_store = transfer["to_store"]
+            units = transfer["units"]
 
-            return (total_cost,)
-
-        # Register the evaluation function
-        toolbox.register("evaluate", evaluate_transfer_plan)
-
-        # Define crossover, mutation, and selection operators
-        def crossover(ind1, ind2):
-            """Custom crossover for transfer plans."""
-            # Create children as copies of parents
-            child1 = creator.Individual(ind1)
-            child2 = creator.Individual(ind2)
-
-            # Perform crossover
+            # Get transport cost per unit
             if (
-                len(ind1) > 0 and len(ind2) > 0
-            ):  # Only crossover if both parents have transfers
-                # Choose crossover point
-                point = random.randint(1, min(len(ind1), len(ind2)) - 1)
+                self.transport_cost_matrix is not None
+                and from_store in self.transport_cost_matrix.index
+                and to_store in self.transport_cost_matrix.columns
+            ):
 
-                # Swap transfers after crossover point
-                child1 = creator.Individual(ind1[:point] + ind2[point:])
-                child2 = creator.Individual(ind2[:point] + ind1[point:])
+                cost_per_unit = float(
+                    self.transport_cost_matrix.loc[from_store, to_store]
+                )
+                total_cost += cost_per_unit * units
 
-                # Validate and fix children
-                child1 = validate_and_fix(child1)
-                child2 = validate_and_fix(child2)
+            elif (
+                self.distance_matrix is not None
+                and from_store in self.distance_matrix.index
+                and to_store in self.distance_matrix.columns
+            ):
 
-            return child1, child2
+                # Fallback: use distance × base rate
+                distance = float(self.distance_matrix.loc[from_store, to_store])
+                base_cost_per_km = 1000  # Simple cost model
+                total_cost += distance * base_cost_per_km * units
 
-        def mutate(individual):
-            """Custom mutation for transfer plans."""
-            # Make a copy of the individual
-            mutant = creator.Individual(individual)
+            else:
+                # If no cost data, penalize heavily
+                total_cost += 999999 * units
 
-            if len(mutant) > 0:  # Only mutate if there are transfers
-                # Choose a random transfer to mutate
-                idx = random.randint(0, len(mutant) - 1)
-                transfer = mutant[idx]
+        return total_cost
 
-                # Extract transfer details
-                from_store, product_id, to_store, units = transfer
+    def _selection(self, population, tournament_size):
+        """
+        Select parents for reproduction using tournament selection.
 
-                # Select mutation type
-                mutation_type = random.randint(0, 2)
+        Tournament selection works like this:
+        1. Pick a few random individuals (tournament_size)
+        2. Choose the best one from this small group
+        3. Repeat to get enough parents
 
-                if mutation_type == 0:  # Change source store
-                    # Find another store with excess of this product
-                    other_excess = [
-                        item
-                        for item in excess_items
-                        if item[0] != from_store and item[1] == product_id
-                    ]
+        This gives better individuals higher chance to reproduce,
+        but still allows some diversity.
+        """
+        parents = []
 
-                    if other_excess:
-                        new_from_store = random.choice(other_excess)[0]
-                        mutant[idx] = (new_from_store, product_id, to_store, units)
+        for _ in range(len(population)):
+            # Tournament: pick random individuals
+            tournament = random.sample(
+                population, min(tournament_size, len(population))
+            )
 
-                elif mutation_type == 1:  # Change destination store
-                    # Find another store with need for this product
-                    other_needed = [
-                        item
-                        for item in needed_items
-                        if item[0] != to_store and item[1] == product_id
-                    ]
+            # Winner: best fitness (lowest cost)
+            winner = min(tournament, key=lambda x: x.fitness)
+            parents.append(winner.copy())
 
-                    if other_needed:
-                        new_to_store = random.choice(other_needed)[0]
-                        mutant[idx] = (from_store, product_id, new_to_store, units)
+        return parents
 
-                else:  # Change units
-                    # Find max available excess and need
-                    max_excess = next(
-                        (
-                            item[2]
-                            for item in excess_items
-                            if item[0] == from_store and item[1] == product_id
-                        ),
-                        0,
-                    )
-                    max_need = next(
-                        (
-                            item[2]
-                            for item in needed_items
-                            if item[0] == to_store and item[1] == product_id
-                        ),
-                        0,
-                    )
+    def _crossover(self, parent1, parent2):
+        """
+        Create two children by combining parts of two parents.
 
-                    # Calculate remaining units from other transfers
-                    excess_used = sum(
-                        t[3]
-                        for t in mutant
-                        if t[0] == from_store and t[1] == product_id and t != transfer
-                    )
-                    need_filled = sum(
-                        t[3]
-                        for t in mutant
-                        if t[2] == to_store and t[1] == product_id and t != transfer
-                    )
+        This is like mixing two different strategies:
+        - Take some transfers from parent1
+        - Take some transfers from parent2
+        - Hope the combination is better than either parent
+        """
+        child1 = Individual()
+        child2 = Individual()
 
-                    # Calculate available range
-                    min_units = 1
-                    max_units = min(max_excess - excess_used, max_need - need_filled)
+        plan1 = parent1.transfer_plan
+        plan2 = parent2.transfer_plan
 
-                    if max_units > min_units:
-                        new_units = random.randint(min_units, max_units)
-                        mutant[idx] = (from_store, product_id, to_store, new_units)
+        if len(plan1) == 0:
+            child1.transfer_plan = plan2.copy()
+            child2.transfer_plan = []
+        elif len(plan2) == 0:
+            child1.transfer_plan = plan1.copy()
+            child2.transfer_plan = []
+        else:
+            # Single-point crossover
+            crossover_point = random.randint(1, min(len(plan1), len(plan2)) - 1)
 
-            # Validate and fix the mutant
-            mutant = validate_and_fix(mutant)
-            return (mutant,)
+            child1.transfer_plan = plan1[:crossover_point] + plan2[crossover_point:]
+            child2.transfer_plan = plan2[:crossover_point] + plan1[crossover_point:]
 
-        def validate_and_fix(individual):
-            """Validate and fix a transfer plan to ensure it respects constraints."""
-            # Create a copy to work with
-            fixed = []
+            # Fix any constraint violations
+            child1.transfer_plan = self._repair_solution(child1.transfer_plan)
+            child2.transfer_plan = self._repair_solution(child2.transfer_plan)
 
-            # Track how much has been transferred from each excess item
-            excess_used = {(item[0], item[1]): 0 for item in excess_items}
+        return child1, child2
 
-            # Track how much has been transferred to each needed item
-            need_filled = {(item[0], item[1]): 0 for item in needed_items}
+    def _mutate(self, individual):
+        """
+        Make small random changes to an individual.
 
-            # Process each transfer
-            for transfer in individual:
-                from_store, product_id, to_store, units = transfer
+        Mutation prevents the population from getting stuck in one area
+        and helps explore new possibilities. Like trying a slightly
+        different approach to see if it works better.
+        """
+        if len(individual.transfer_plan) == 0:
+            # If empty, create a small random solution
+            individual.transfer_plan = self._create_random_solution()
+            return
 
-                # Skip self-transfers
-                if from_store == to_store:
-                    continue
+        # Choose mutation type randomly
+        mutation_type = random.randint(1, 4)
 
-                # Get maximum available excess
-                max_excess = next(
-                    (
-                        item[2]
-                        for item in excess_items
-                        if item[0] == from_store and item[1] == product_id
-                    ),
-                    0,
+        if mutation_type == 1:
+            # Change quantity of a random transfer
+            transfer_idx = random.randint(0, len(individual.transfer_plan) - 1)
+            transfer = individual.transfer_plan[transfer_idx]
+
+            # Get max possible transfer for this route
+            max_units = self._get_max_transfer(
+                transfer["from_store"], transfer["to_store"], transfer["product_id"]
+            )
+
+            if max_units > 0:
+                individual.transfer_plan[transfer_idx]["units"] = random.randint(
+                    1, max_units
                 )
 
-                # Get maximum needed
-                max_need = next(
-                    (
-                        item[2]
-                        for item in needed_items
-                        if item[0] == to_store and item[1] == product_id
-                    ),
-                    0,
-                )
+        elif mutation_type == 2:
+            # Remove a random transfer
+            if len(individual.transfer_plan) > 1:
+                transfer_idx = random.randint(0, len(individual.transfer_plan) - 1)
+                individual.transfer_plan.pop(transfer_idx)
 
-                # Check if this transfer is valid
-                if (
-                    max_excess == 0
-                    or max_need == 0
-                    or from_store == to_store
-                    or units <= 0
-                ):
-                    continue  # Skip invalid transfer
+        elif mutation_type == 3:
+            # Add a new random transfer
+            new_transfer = self._create_random_transfer()
+            if new_transfer:
+                individual.transfer_plan.append(new_transfer)
 
-                # Calculate remaining capacity
-                remaining_excess = max_excess - excess_used.get(
-                    (from_store, product_id), 0
-                )
-                remaining_need = max_need - need_filled.get((to_store, product_id), 0)
+        else:
+            # Change source or destination of a random transfer
+            transfer_idx = random.randint(0, len(individual.transfer_plan) - 1)
+            transfer = individual.transfer_plan[transfer_idx]
 
-                if remaining_excess <= 0 or remaining_need <= 0:
-                    continue  # No capacity left
+            if random.random() < 0.5:
+                # Change source store
+                excess_options = self.excess_inventory[
+                    (self.excess_inventory["product_id"] == transfer["product_id"])
+                    & (self.excess_inventory["store_id"] != transfer["from_store"])
+                ]
+                if len(excess_options) > 0:
+                    new_source = random.choice(excess_options["store_id"].tolist())
+                    individual.transfer_plan[transfer_idx]["from_store"] = new_source
+            else:
+                # Change destination store
+                needed_options = self.needed_inventory[
+                    (self.needed_inventory["product_id"] == transfer["product_id"])
+                    & (self.needed_inventory["store_id"] != transfer["to_store"])
+                ]
+                if len(needed_options) > 0:
+                    new_dest = random.choice(needed_options["store_id"].tolist())
+                    individual.transfer_plan[transfer_idx]["to_store"] = new_dest
 
-                # Adjust units to respect constraints
-                adjusted_units = min(units, remaining_excess, remaining_need)
+        # Fix any constraint violations after mutation
+        individual.transfer_plan = self._repair_solution(individual.transfer_plan)
 
-                if adjusted_units > 0:
-                    # Add valid transfer
-                    fixed.append((from_store, product_id, to_store, adjusted_units))
+    def _repair_solution(self, transfer_plan):
+        """
+        Fix a transfer plan that might violate constraints.
+
+        Sometimes crossover or mutation creates impossible plans:
+        - Transferring more than available
+        - Transferring more than needed
+        - Self-transfers (store to itself)
+
+        This function fixes these problems.
+        """
+        if not transfer_plan:
+            return []
+
+        # Track how much is being transferred from/to each store-product combination
+        excess_used = {}  # (store_id, product_id) -> units_used
+        needed_filled = {}  # (store_id, product_id) -> units_filled
+
+        valid_transfers = []
+
+        for transfer in transfer_plan:
+            from_store = transfer["from_store"]
+            to_store = transfer["to_store"]
+            product_id = transfer["product_id"]
+            units = transfer["units"]
+
+            # Skip self-transfers
+            if from_store == to_store:
+                continue
+
+            # Get available excess and need
+            excess_key = (from_store, product_id)
+            needed_key = (to_store, product_id)
+
+            # Find max available excess
+            max_excess = 0
+            excess_match = self.excess_inventory[
+                (self.excess_inventory["store_id"] == from_store)
+                & (self.excess_inventory["product_id"] == product_id)
+            ]
+            if len(excess_match) > 0:
+                max_excess = excess_match.iloc[0]["excess_units"]
+
+            # Find max needed
+            max_needed = 0
+            needed_match = self.needed_inventory[
+                (self.needed_inventory["store_id"] == to_store)
+                & (self.needed_inventory["product_id"] == product_id)
+            ]
+            if len(needed_match) > 0:
+                max_needed = needed_match.iloc[0]["needed_units"]
+
+            # Check available capacity
+            excess_already_used = excess_used.get(excess_key, 0)
+            needed_already_filled = needed_filled.get(needed_key, 0)
+
+            remaining_excess = max_excess - excess_already_used
+            remaining_needed = max_needed - needed_already_filled
+
+            if remaining_excess > 0 and remaining_needed > 0:
+                # Limit transfer to what's actually possible
+                actual_units = min(units, remaining_excess, remaining_needed)
+
+                if actual_units > 0:
+                    valid_transfers.append(
+                        {
+                            "from_store": from_store,
+                            "to_store": to_store,
+                            "product_id": product_id,
+                            "units": actual_units,
+                        }
+                    )
 
                     # Update tracking
-                    excess_used[(from_store, product_id)] = (
-                        excess_used.get((from_store, product_id), 0) + adjusted_units
-                    )
-                    need_filled[(to_store, product_id)] = (
-                        need_filled.get((to_store, product_id), 0) + adjusted_units
-                    )
+                    excess_used[excess_key] = excess_already_used + actual_units
+                    needed_filled[needed_key] = needed_already_filled + actual_units
 
-            return creator.Individual(fixed)
+        return valid_transfers
 
-        # Register the genetic operators
-        toolbox.register("mate", crossover)
-        toolbox.register("mutate", mutate)
-        toolbox.register("select", tools.selTournament, tournsize=tournament_size)
+    def _get_max_transfer(self, from_store, to_store, product_id):
+        """Helper function to get maximum possible transfer between two stores."""
+        # Get available excess
+        excess_match = self.excess_inventory[
+            (self.excess_inventory["store_id"] == from_store)
+            & (self.excess_inventory["product_id"] == product_id)
+        ]
+        max_excess = (
+            excess_match.iloc[0]["excess_units"] if len(excess_match) > 0 else 0
+        )
 
-        # Create the initial population
-        population = toolbox.population(n=population_size)
+        # Get needed amount
+        needed_match = self.needed_inventory[
+            (self.needed_inventory["store_id"] == to_store)
+            & (self.needed_inventory["product_id"] == product_id)
+        ]
+        max_needed = (
+            needed_match.iloc[0]["needed_units"] if len(needed_match) > 0 else 0
+        )
 
-        # Track the best individual
-        hof = tools.HallOfFame(1)
+        return min(max_excess, max_needed)
 
-        # Statistics to track
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean)
-        stats.register("min", np.min)
-        stats.register("max", np.max)
+    def _create_random_transfer(self):
+        """Create one random transfer for mutation."""
+        if not self.valid_products:
+            return None
 
-        # Run the genetic algorithm
-        if verbose:
-            print(
-                f"Running genetic algorithm with {population_size} individuals for {num_generations} generations..."
-            )
+        product_id = random.choice(self.valid_products)
 
-            # Run with progress bar
-            algorithms.eaSimple(
-                population,
-                toolbox,
-                cxpb=crossover_prob,
-                mutpb=mutation_prob,
-                ngen=num_generations,
-                stats=stats,
-                halloffame=hof,
-                verbose=False,
-            )
+        # Get available excess and needed stores for this product
+        excess_options = self.excess_inventory[
+            self.excess_inventory["product_id"] == product_id
+        ]
+        needed_options = self.needed_inventory[
+            self.needed_inventory["product_id"] == product_id
+        ]
 
-            # Display progress manually
-            for gen in tqdm(range(num_generations), desc="Generations"):
-                # Evaluate and gather stats for this generation
-                fits = [
-                    ind.fitness.values[0] for ind in population if ind.fitness.valid
-                ]
-                if fits:
-                    min_fit = min(fits)
-                    avg_fit = sum(fits) / len(fits)
-                    if gen % 10 == 0:  # Only show every 10 generations
-                        print(
-                            f"Generation {gen}: Min={min_fit:,.0f}, Avg={avg_fit:,.0f}"
-                        )
-        else:
-            # Run without verbose output
-            algorithms.eaSimple(
-                population,
-                toolbox,
-                cxpb=crossover_prob,
-                mutpb=mutation_prob,
-                ngen=num_generations,
-                stats=stats,
-                halloffame=hof,
-                verbose=False,
-            )
+        if len(excess_options) == 0 or len(needed_options) == 0:
+            return None
 
-        # Store best solution and fitness
-        if len(hof) > 0:
-            self.best_solution = hof[0]
-            self.best_fitness = hof[0].fitness.values[0]
-        else:
-            print("No solution found.")
-            self.transfer_plan = pd.DataFrame()
-            return self.transfer_plan
+        from_store = random.choice(excess_options["store_id"].tolist())
+        to_store = random.choice(needed_options["store_id"].tolist())
 
-        # Get the best solution
-        best_individual = hof[0]
+        if from_store == to_store:
+            return None
 
-        # Convert the best solution to a transfer plan
+        max_units = self._get_max_transfer(from_store, to_store, product_id)
+        if max_units > 0:
+            units = random.randint(1, max_units)
+            return {
+                "from_store": from_store,
+                "to_store": to_store,
+                "product_id": product_id,
+                "units": units,
+            }
+
+        return None
+
+    def _convert_to_dataframe(self, individual):
+        """
+        Convert the best individual's transfer plan to a pandas DataFrame.
+        This matches the format expected by the rest of the system.
+        """
+        if not individual.transfer_plan:
+            return pd.DataFrame()
+
         transfers = []
 
-        for from_store, product_id, to_store, units in best_individual:
-            # Get distance from matrix
+        for transfer in individual.transfer_plan:
+            from_store = transfer["from_store"]
+            to_store = transfer["to_store"]
+            product_id = transfer["product_id"]
+            units = transfer["units"]
+
+            # Get distance
+            distance = 0
             if (
-                from_store in self.distance_matrix.index
+                self.distance_matrix is not None
+                and from_store in self.distance_matrix.index
                 and to_store in self.distance_matrix.columns
             ):
                 distance = float(self.distance_matrix.loc[from_store, to_store])
-            else:
-                distance = 0
 
-            # Get transport cost from matrix
+            # Get transport cost
+            transport_cost = 0
             if (
-                from_store in self.transport_cost_matrix.index
+                self.transport_cost_matrix is not None
+                and from_store in self.transport_cost_matrix.index
                 and to_store in self.transport_cost_matrix.columns
             ):
-                transport_cost = (
-                    float(self.transport_cost_matrix.loc[from_store, to_store]) * units
+                cost_per_unit = float(
+                    self.transport_cost_matrix.loc[from_store, to_store]
                 )
+                transport_cost = cost_per_unit * units
             else:
-                transport_cost = distance * 10000 * units  # Basic cost estimate
+                # Fallback cost calculation
+                transport_cost = distance * 1000 * units
 
             transfers.append(
                 {
@@ -547,25 +849,7 @@ class GeneticAlgorithmOptimizer:
                 }
             )
 
-        # Create DataFrame from transfers
-        self.transfer_plan = pd.DataFrame(transfers)
-
-        if not self.transfer_plan.empty:
-            # Calculate total cost and summary metrics
-            total_units = self.transfer_plan["units"].sum()
-            total_cost = self.transfer_plan["transport_cost"].sum()
-            avg_cost_per_unit = total_cost / total_units if total_units > 0 else 0
-
-            print(f"Genetic Algorithm Transfer Plan Summary:")
-            print(f"- Best fitness (total cost): {self.best_fitness:,.0f}")
-            print(f"- Total transfers: {len(self.transfer_plan)}")
-            print(f"- Total units to transfer: {total_units}")
-            print(f"- Total transport cost: {total_cost:,.0f} VND")
-            print(f"- Average cost per unit: {avg_cost_per_unit:,.0f} VND")
-        else:
-            print("No transfers recommended by genetic algorithm.")
-
-        return self.transfer_plan
+        return pd.DataFrame(transfers)
 
     def add_store_product_names(self, stores_df=None, products_df=None):
         """
@@ -599,12 +883,22 @@ class GeneticAlgorithmOptimizer:
 
 
 if __name__ == "__main__":
+    """
+    Test the Genetic Algorithm Optimizer.
+    """
     import os
+    from pathlib import Path
+
+    # Project root is already set up at module level
+    project_root = Path(__file__).parent.parent.parent
 
     from src.engine.analyzer import InventoryAnalyzer
 
-    # Check if data files exist
-    data_dir = "data"
+    print("Testing Genetic Algorithm Optimizer (From Scratch Implementation)")
+    print("=" * 70)
+
+    # Check if data files exist (relative to project root)
+    data_dir = project_root / "data"
     required_files = [
         "sales_data.csv",
         "inventory_data.csv",
@@ -612,67 +906,96 @@ if __name__ == "__main__":
         "transport_cost_matrix.csv",
     ]
 
+    print("Checking data files...")
     for file in required_files:
-        if not os.path.exists(os.path.join(data_dir, file)):
+        if not (data_dir / file).exists():
             print(f"Required file {file} not found. Please run data generator first.")
             exit(1)
+        else:
+            print(f"✓ {file}")
 
+    print("\nLoading and analyzing data...")
     # Create analyzer
     analyzer = InventoryAnalyzer()
 
     # Load data
     analyzer.load_data(
-        sales_path=os.path.join(data_dir, "sales_data.csv"),
-        inventory_path=os.path.join(data_dir, "inventory_data.csv"),
+        sales_path=str(data_dir / "sales_data.csv"),
+        inventory_path=str(data_dir / "inventory_data.csv"),
         stores_path=(
-            os.path.join(data_dir, "stores.csv")
-            if os.path.exists(os.path.join(data_dir, "stores.csv"))
-            else None
+            str(data_dir / "stores.csv") if (data_dir / "stores.csv").exists() else None
         ),
         products_path=(
-            os.path.join(data_dir, "products.csv")
-            if os.path.exists(os.path.join(data_dir, "products.csv"))
+            str(data_dir / "products.csv")
+            if (data_dir / "products.csv").exists()
             else None
         ),
     )
 
     # Analyze data
-    analyzer.analyze_sales_data()
-
-    # Identify imbalances
+    analysis_df = analyzer.analyze_sales_data()
     excess_df, needed_df = analyzer.identify_inventory_imbalances()
 
+    print(f"Analysis complete:")
+    print(f"   • Products with excess: {len(excess_df)}")
+    print(f"   • Products needed: {len(needed_df)}")
+    print(f"   • Total excess units: {excess_df['excess_units'].sum():,}")
+    print(f"   • Total needed units: {needed_df['needed_units'].sum():,}")
+
+    print("\nCreating GA optimizer...")
     # Create optimizer
     optimizer = GeneticAlgorithmOptimizer()
 
     # Load matrices
     optimizer.load_matrices(
-        distance_path=os.path.join(data_dir, "distance_matrix.csv"),
-        cost_path=os.path.join(data_dir, "transport_cost_matrix.csv"),
+        distance_path=str(data_dir / "distance_matrix.csv"),
+        cost_path=str(data_dir / "transport_cost_matrix.csv"),
     )
 
-    # Generate transfer plan (using a smaller population and fewer generations for testing)
+    print("Running genetic algorithm optimization...")
+    # Generate transfer plan (using config defaults, but smaller for quick testing)
+    from src.config import get_environment_config
+
+    test_config = get_environment_config("testing")  # Use testing config for quick run
+
     transfer_plan = optimizer.optimize(
         excess_df,
         needed_df,
-        population_size=50,  # Smaller for testing
-        num_generations=20,  # Fewer for testing
+        population_size=test_config["ga_population"],  # Small for quick test
+        num_generations=test_config["ga_generations"],  # Few generations for demo
         verbose=True,
     )
 
     # Add store and product names if data available
-    if os.path.exists(os.path.join(data_dir, "stores.csv")) and os.path.exists(
-        os.path.join(data_dir, "products.csv")
-    ):
-        stores_df = pd.read_csv(os.path.join(data_dir, "stores.csv"))
-        products_df = pd.read_csv(os.path.join(data_dir, "products.csv"))
+    if (data_dir / "stores.csv").exists() and (data_dir / "products.csv").exists():
+        stores_df = pd.read_csv(str(data_dir / "stores.csv"))
+        products_df = pd.read_csv(str(data_dir / "products.csv"))
         optimizer.add_store_product_names(stores_df, products_df)
 
-    # Evaluate impact
+    # Save and summarize results
     if not transfer_plan.empty:
-        impact_df, _ = analyzer.evaluate_plan_impact(transfer_plan)
+        results_dir = project_root / "results"
+        results_dir.mkdir(exist_ok=True)
+        output_path = results_dir / "ga_transfers_test.csv"
+        transfer_plan.to_csv(str(output_path), index=False)
 
-        # Save transfer plan
-        output_path = os.path.join(data_dir, "ga_transfers.csv")
-        transfer_plan.to_csv(output_path, index=False)
-        print(f"Transfer plan saved to {output_path}")
+        print(f"\nResults saved to: {output_path}")
+        print("Genetic Algorithm test completed successfully!")
+
+        # Show a few sample transfers
+        print(f"\nSample transfers (top 3):")
+        sample_cols = [
+            "from_store_id",
+            "to_store_id",
+            "product_id",
+            "units",
+            "transport_cost",
+        ]
+        available_cols = [col for col in sample_cols if col in transfer_plan.columns]
+        print(transfer_plan[available_cols].head(3).to_string(index=False))
+
+    else:
+        print("No transfers were generated. This might indicate:")
+        print("   • No beneficial transfers exist")
+        print("   • Constraints are too restrictive")
+        print("   • Need to adjust GA parameters")

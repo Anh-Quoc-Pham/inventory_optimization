@@ -5,15 +5,16 @@ sys.path.append(".")
 import numpy as np
 import pandas as pd
 
+from src.config import PRODUCT_CATEGORIES, RANDOM_SEED
 from src.engine.data_model import Product
 
 
 class ProductGenerator:
-    def __init__(self, random_seed=2025):
+    def __init__(self, random_seed=None):
         """Initialize with optional random seed for reproducibility."""
-        self.random_seed = random_seed
-        np.random.seed(random_seed)
-        random.seed(random_seed)
+        self.random_seed = random_seed or RANDOM_SEED
+        np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
 
         # Define product categories and names
         self.electronics_products = [

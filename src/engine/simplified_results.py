@@ -463,7 +463,7 @@ class SimplifiedResults:
                     ):
                         print(line)
             print("=" * 60)
-            print("📁 Check 'results' folder for detailed files:")
+            print("Check 'results' folder for detailed files:")
             print("   • EXECUTIVE_SUMMARY.txt - Complete overview")
             print("   • INVENTORY_OVERVIEW.png - Visual dashboard")
             print("   • TRANSFER_PLAN.csv - Actionable transfer list")

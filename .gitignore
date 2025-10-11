@@ -51,7 +51,7 @@ venv.bak/
 data/*.csv
 data/*.feather
 data/*.xlsx
-notebooks/
+# notebooks/
 
 # Output and figures
 results/

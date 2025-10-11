@@ -72,10 +72,10 @@ This creates sample data and runs optimization with both algorithms.
 
 After running, you'll find **4 essential files** in the `results` folder:
 
-- 📋 `EXECUTIVE_SUMMARY.txt` - Your main report
-- 📈 `INVENTORY_OVERVIEW.png` - Visual dashboard
-- 📝 `TRANSFER_PLAN.csv` - Actionable transfer list
-- 📄 `TRANSFER_SUMMARY.txt` - Quick implementation guide
+- `EXECUTIVE_SUMMARY.txt` - Your main report
+- `INVENTORY_OVERVIEW.png` - Visual dashboard
+- `TRANSFER_PLAN.csv` - Actionable transfer list
+- `TRANSFER_SUMMARY.txt` - Quick implementation guide
 
 ### 3. Clean Up (Optional)
 
@@ -85,7 +85,7 @@ python cleanup_results.py
 
 Removes complex/unnecessary files, keeps only the 4 essential outputs.
 
-## 📖 Detailed Usage
+## Detailed Usage
 
 ### Individual Algorithm Testing
 

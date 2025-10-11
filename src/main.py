@@ -36,8 +36,8 @@ from src.config import (
 from src.data_generator.data_generator_main import generate_all_data
 from src.engine.analyzer import InventoryAnalyzer
 from src.engine.genetic_algorithm import GeneticAlgorithmOptimizer
+from src.engine.results_manager import ResultsManager
 from src.engine.rule_based import RuleBasedOptimizer
-from src.engine.simplified_results import SimplifiedResults
 
 
 def setup_directories():
@@ -202,40 +202,17 @@ def run_ga_optimization(analyzer, excess_df, needed_df, args):
     return transfer_plan, None
 
 
-def create_simplified_results(analysis_df, results_dict, analyzer, args):
-    """Create simplified, focused results."""
-    print("\n=== GENERATING SIMPLIFIED RESULTS ===")
+def create_results(analysis_df, results_dict, analyzer, args):
+    """Create simplified results: summary and best transfer plan."""
+    print("\n=== GENERATING RESULTS ===")
 
     # Load store and product data
     stores_df = pd.read_csv(os.path.join(args.data_dir, "stores.csv"))
     products_df = pd.read_csv(os.path.join(args.data_dir, "products.csv"))
 
-    # Extract transfer plans and impact data
-    transfer_plans = {
-        method: results[0]
-        for method, results in results_dict.items()
-        if results[0] is not None and not results[0].empty
-    }
-
-    impact_data = {
-        method: results[1]
-        for method, results in results_dict.items()
-        if results[1] is not None
-    }
-
-    # Create simplified results generator
-    simplified = SimplifiedResults(args.results_dir)
-
-    # Clean old files first
-    simplified.clean_results_directory()
-
-    # Generate focused executive summary and key outputs
-    simplified.generate_executive_summary(
-        analysis_df, transfer_plans, impact_data, stores_df, products_df
-    )
-
-    # Print quick summary to console
-    simplified.print_quick_summary()
+    # Create results manager and generate final results
+    results_manager = ResultsManager(args.results_dir)
+    results_manager.create_final_results(results_dict, stores_df, products_df)
 
 
 def main():
@@ -372,13 +349,14 @@ def main():
         )
         results_dict["Genetic Algorithm"] = (transfer_plan, impact_df)
 
-    # Create simplified results and reports
+    # Create comprehensive results and reports
     if results_dict:
-        create_simplified_results(analysis_df, results_dict, analyzer, args)
+        create_results(analysis_df, results_dict, analyzer, args)
 
     print("\n=== INVENTORY TRANSFER OPTIMIZATION COMPLETE ===")
-    print(f"Results saved to {args.results_dir} directory")
-    print(f"Visualizations saved to {args.vis_dir} directory")
+    print(f"Results saved to {args.results_dir} directory:")
+    print(f"  • result_summary.txt - Algorithm comparison and recommendations")
+    print(f"  • best_transfer_plan.csv - Optimized transfer plan")
 
 
 if __name__ == "__main__":

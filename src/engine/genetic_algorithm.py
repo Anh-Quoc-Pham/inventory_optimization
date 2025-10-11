@@ -11,6 +11,7 @@ if __name__ == "__main__" or "src.engine" not in sys.modules:
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from src.config import RANDOM_SEED, get_ga_config
 from src.utils.logger import get_optimization_logger
@@ -242,60 +243,70 @@ class GeneticAlgorithmOptimizer:
             f"Step 3: Evolution over {num_generations} generations...",
         )
 
-        for generation in range(1, num_generations + 1):
-            # Selection: Choose parents for reproduction
-            parents = self._selection(population, tournament_size)
+        with tqdm(
+            range(1, num_generations + 1), desc="GA Evolution", unit="gen"
+        ) as pbar:
+            for generation in pbar:
+                # Selection: Choose parents for reproduction
+                parents = self._selection(population, tournament_size)
 
-            # Create new generation
-            offspring = []
+                # Create new generation
+                offspring = []
 
-            # Crossover: Create children by combining parents
-            for i in range(0, len(parents), 2):
-                parent1 = parents[i]
-                parent2 = parents[i + 1] if i + 1 < len(parents) else parents[0]
+                # Crossover: Create children by combining parents
+                for i in range(0, len(parents), 2):
+                    parent1 = parents[i]
+                    parent2 = parents[i + 1] if i + 1 < len(parents) else parents[0]
 
-                if random.random() < crossover_prob:
-                    child1, child2 = self._crossover(parent1, parent2)
+                    if random.random() < crossover_prob:
+                        child1, child2 = self._crossover(parent1, parent2)
+                    else:
+                        child1, child2 = parent1.copy(), parent2.copy()
+
+                    offspring.extend([child1, child2])
+
+                # Mutation: Random changes to maintain diversity
+                for individual in offspring:
+                    if random.random() < mutation_prob:
+                        self._mutate(individual)
+
+                # Ensure population size
+                offspring = offspring[:population_size]
+
+                # Evaluate new generation
+                self._evaluate_population(offspring)
+
+                # Elitism: Keep the best individual from previous generation
+                current_best = min(offspring, key=lambda x: x.fitness)
+                if best_individual.fitness < current_best.fitness:
+                    # Replace worst individual with previous best
+                    worst_idx = max(
+                        range(len(offspring)), key=lambda i: offspring[i].fitness
+                    )
+                    offspring[worst_idx] = best_individual
                 else:
-                    child1, child2 = parent1.copy(), parent2.copy()
+                    best_individual = current_best
 
-                offspring.extend([child1, child2])
+                # Replace population
+                population = offspring
 
-            # Mutation: Random changes to maintain diversity
-            for individual in offspring:
-                if random.random() < mutation_prob:
-                    self._mutate(individual)
-
-            # Ensure population size
-            offspring = offspring[:population_size]
-
-            # Evaluate new generation
-            self._evaluate_population(offspring)
-
-            # Elitism: Keep the best individual from previous generation
-            current_best = min(offspring, key=lambda x: x.fitness)
-            if best_individual.fitness < current_best.fitness:
-                # Replace worst individual with previous best
-                worst_idx = max(
-                    range(len(offspring)), key=lambda i: offspring[i].fitness
-                )
-                offspring[worst_idx] = best_individual
-            else:
-                best_individual = current_best
-
-            # Replace population
-            population = offspring
-
-            # Track statistics
-            if verbose:
+                # Track statistics and update progress bar
                 fitness_values = [ind.fitness for ind in population]
                 min_fitness = min(fitness_values)
                 avg_fitness = sum(fitness_values) / len(fitness_values)
                 generation_stats.append((generation, min_fitness, avg_fitness))
 
-                if generation % 10 == 0 or generation == num_generations:
+                # Update progress bar with current best fitness
+                pbar.set_postfix(
+                    {
+                        "Best": f"{min_fitness:,.0f}",
+                        "Avg": f"{avg_fitness:,.0f}",
+                        "Transfers": len(best_individual.transfer_plan),
+                    }
+                )
+
+                if verbose and (generation % 10 == 0 or generation == num_generations):
                     generation_msg = f"Generation {generation}: Best={min_fitness:,.0f}, Avg={avg_fitness:,.0f}"
-                    print(generation_msg)
                     self.logger_system.log_progress(
                         "genetic_algorithm_optimization", generation_msg
                     )
@@ -912,7 +923,7 @@ if __name__ == "__main__":
             print(f"Required file {file} not found. Please run data generator first.")
             exit(1)
         else:
-            print(f"✓ {file}")
+            print(f"[OK] {file}")
 
     print("\nLoading and analyzing data...")
     # Create analyzer

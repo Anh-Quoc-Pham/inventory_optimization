@@ -10,6 +10,7 @@ if __name__ == "__main__" or "src.engine" not in sys.modules:
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from src.config import (
     BASE_TRANSPORT_COST_PER_KM,
@@ -132,121 +133,140 @@ class RuleBasedOptimizer:
             transferred_to[key] = 0
 
         # For each product in need, find the closest store with excess
-        for _, need_row in needed_sorted.iterrows():
-            need_store_id = need_row["store_id"]
-            need_product_id = need_row["product_id"]
-            needed_units = need_row["needed_units"]
+        with tqdm(
+            needed_sorted.iterrows(),
+            total=len(needed_sorted),
+            desc="Processing needed inventory",
+            unit="item",
+        ) as pbar:
+            for _, need_row in pbar:
+                need_store_id = need_row["store_id"]
+                need_product_id = need_row["product_id"]
+                needed_units = need_row["needed_units"]
 
-            # Adjust for already received units
-            need_key = (need_store_id, need_product_id)
-            if need_key in transferred_to:
-                needed_units -= transferred_to[need_key]
+                # Adjust for already received units
+                need_key = (need_store_id, need_product_id)
+                if need_key in transferred_to:
+                    needed_units -= transferred_to[need_key]
 
-            if needed_units <= 0:
-                continue
-
-            # Find excess inventory for this product
-            excess_for_product = excess_sorted[
-                excess_sorted["product_id"] == need_product_id
-            ]
-
-            if excess_for_product.empty:
-                continue
-
-            # Sort excess stores by distance to the need store
-            excess_for_product = excess_for_product.copy()
-
-            # Add distance to the excess inventory
-            excess_for_product["distance"] = excess_for_product["store_id"].apply(
-                lambda x: (
-                    float(self.distance_matrix.loc[x, need_store_id])
-                    if x != need_store_id
-                    and x in self.distance_matrix.index
-                    and need_store_id in self.distance_matrix.columns
-                    else float("inf")
-                )
-            )
-
-            # Sort by distance (closest first)
-            excess_for_product = excess_for_product.sort_values("distance")
-
-            # Transfer from closest stores with excess first
-            for _, excess_row in excess_for_product.iterrows():
-                excess_store_id = excess_row["store_id"]
-                excess_product_id = excess_row["product_id"]
-                excess_units = excess_row["excess_units"]
-
-                # Skip self-transfers
-                if excess_store_id == need_store_id:
+                if needed_units <= 0:
                     continue
 
-                # Adjust for already transferred units
-                excess_key = (excess_store_id, excess_product_id)
-                if excess_key in transferred_from:
-                    excess_units -= transferred_from[excess_key]
+                # Find excess inventory for this product
+                excess_for_product = excess_sorted[
+                    excess_sorted["product_id"] == need_product_id
+                ]
 
-                if excess_units <= 0:
+                if excess_for_product.empty:
                     continue
 
-                # Calculate units to transfer
-                transfer_units = min(needed_units, excess_units)
+                # Sort excess stores by distance to the need store
+                excess_for_product = excess_for_product.copy()
 
-                if transfer_units > 0:
-                    # Calculate distance from matrix
-                    if (
-                        excess_store_id in self.distance_matrix.index
+                # Add distance to the excess inventory
+                excess_for_product["distance"] = excess_for_product["store_id"].apply(
+                    lambda x: (
+                        float(self.distance_matrix.loc[x, need_store_id])
+                        if x != need_store_id
+                        and x in self.distance_matrix.index
                         and need_store_id in self.distance_matrix.columns
-                    ):
-                        distance = float(
-                            self.distance_matrix.loc[excess_store_id, need_store_id]
-                        )
-                    else:
-                        distance = 0  # Default if distance not available
-
-                    # Calculate transport cost from matrix
-                    if (
-                        excess_store_id in self.transport_cost_matrix.index
-                        and need_store_id in self.transport_cost_matrix.columns
-                    ):
-                        transport_cost = (
-                            float(
-                                self.transport_cost_matrix.loc[
-                                    excess_store_id, need_store_id
-                                ]
-                            )
-                            * transfer_units
-                        )
-                    else:
-                        transport_cost = 0  # Default if cost not available
-
-                    # Add transfer to recommendations
-                    transfers.append(
-                        {
-                            "from_store_id": excess_store_id,
-                            "to_store_id": need_store_id,
-                            "product_id": need_product_id,
-                            "units": int(transfer_units),
-                            "distance_km": distance,
-                            "transport_cost": transport_cost,
-                        }
+                        else float("inf")
                     )
+                )
 
-                    # Update tracking dictionaries
+                # Sort by distance (closest first)
+                excess_for_product = excess_for_product.sort_values("distance")
+
+                # Transfer from closest stores with excess first
+                for _, excess_row in excess_for_product.iterrows():
+                    excess_store_id = excess_row["store_id"]
+                    excess_product_id = excess_row["product_id"]
+                    excess_units = excess_row["excess_units"]
+
+                    # Skip self-transfers
+                    if excess_store_id == need_store_id:
+                        continue
+
+                    # Adjust for already transferred units
+                    excess_key = (excess_store_id, excess_product_id)
                     if excess_key in transferred_from:
-                        transferred_from[excess_key] += transfer_units
-                    else:
-                        transferred_from[excess_key] = transfer_units
+                        excess_units -= transferred_from[excess_key]
 
-                    if need_key in transferred_to:
-                        transferred_to[need_key] += transfer_units
-                    else:
-                        transferred_to[need_key] = transfer_units
+                    if excess_units <= 0:
+                        continue
 
-                    # Update needed units
-                    needed_units -= transfer_units
+                    # Calculate units to transfer
+                    transfer_units = min(needed_units, excess_units)
 
-                    if needed_units <= 0:
-                        break
+                    if transfer_units > 0:
+                        # Calculate distance from matrix
+                        if (
+                            excess_store_id in self.distance_matrix.index
+                            and need_store_id in self.distance_matrix.columns
+                        ):
+                            distance = float(
+                                self.distance_matrix.loc[excess_store_id, need_store_id]
+                            )
+                        else:
+                            distance = 0  # Default if distance not available
+
+                        # Calculate transport cost from matrix
+                        if (
+                            self.transport_cost_matrix is not None
+                            and excess_store_id in self.transport_cost_matrix.index
+                            and need_store_id in self.transport_cost_matrix.columns
+                        ):
+                            cost_value = self.transport_cost_matrix.loc[
+                                excess_store_id, need_store_id
+                            ]
+                            base_cost = float(cost_value)
+                            if np.isnan(base_cost) or base_cost <= 0:
+                                # Skip this transfer if cost is invalid
+                                self.logger_system.log_progress(
+                                    "rule_based_optimization",
+                                    f"Skipping transfer {excess_store_id} → {need_store_id}: invalid cost ({base_cost})",
+                                )
+                                continue
+                            transport_cost = base_cost * transfer_units
+                        else:
+                            # Skip this transfer if stores not found in matrix or matrix is None
+                            self.logger_system.log_progress(
+                                "rule_based_optimization",
+                                f"Skipping transfer {excess_store_id} → {need_store_id}: stores not in cost matrix or matrix unavailable",
+                            )
+                            continue
+
+                        # Add transfer to recommendations
+                        transfers.append(
+                            {
+                                "from_store_id": excess_store_id,
+                                "to_store_id": need_store_id,
+                                "product_id": need_product_id,
+                                "units": int(transfer_units),
+                                "distance_km": distance,
+                                "transport_cost": transport_cost,
+                            }
+                        )
+
+                        # Update tracking dictionaries
+                        if excess_key in transferred_from:
+                            transferred_from[excess_key] += transfer_units
+                        else:
+                            transferred_from[excess_key] = transfer_units
+
+                        if need_key in transferred_to:
+                            transferred_to[need_key] += transfer_units
+                        else:
+                            transferred_to[need_key] = transfer_units
+
+                        # Update needed units
+                        needed_units -= transfer_units
+
+                        if needed_units <= 0:
+                            break
+
+                # Update progress bar with current item info
+                pbar.set_postfix({"product": need_product_id, "store": need_store_id})
 
         # Create DataFrame from transfers
         self.transfer_plan = pd.DataFrame(transfers)
@@ -373,7 +393,7 @@ if __name__ == "__main__":
             print(f"Required file {file} not found. Please run data generator first.")
             exit(1)
         else:
-            print(f"✓ {file}")
+            print(f"[OK] {file}")
 
     # Create analyzer
     analyzer = InventoryAnalyzer()

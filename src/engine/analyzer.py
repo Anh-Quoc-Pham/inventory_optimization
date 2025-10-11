@@ -23,6 +23,12 @@ class InventoryAnalyzer:
         self.excess_inventory = None
         self.needed_inventory = None
 
+        # Ensure date column is datetime if sales_df is provided
+        if self.sales_df is not None and "date" in self.sales_df.columns:
+            if self.sales_df["date"].dtype == "object":  # String type
+                print("Converting date column to datetime format...")
+                self.sales_df["date"] = pd.to_datetime(self.sales_df["date"])
+
     def load_data(
         self, sales_path, inventory_path, stores_path=None, products_path=None
     ):
@@ -62,6 +68,12 @@ class InventoryAnalyzer:
             DataFrame with sales analysis metrics
         """
         print("Analyzing sales data...")
+
+        # Check if sales_df is loaded
+        if self.sales_df is None:
+            raise ValueError(
+                "Sales data not loaded. Please provide sales_df in constructor or call load_data()"
+            )
 
         # Add store city to sales data if stores data is available
         if isinstance(self.stores, pd.DataFrame):

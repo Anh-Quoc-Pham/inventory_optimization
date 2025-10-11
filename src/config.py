@@ -5,6 +5,7 @@ This module contains all configuration parameters used throughout the project.
 """
 
 from pathlib import Path
+from typing import Optional
 
 # ============================================================================
 # CORE SETTINGS
@@ -39,7 +40,7 @@ SALES_DAYS = 90
 
 # Inventory thresholds (in days)
 MIN_INVENTORY_DAYS = 7  # Below this is shortage
-MAX_INVENTORY_DAYS = 30  # Above this is excess
+MAX_INVENTORY_DAYS = 21  # Above this is excess
 
 # Inventory distribution percentages
 EXCESS_PERCENT = 20  # Percentage of items with excess
@@ -64,8 +65,8 @@ PRODUCT_CATEGORIES = ["Electronics", "Clothing", "Home Goods", "Food", "Beauty"]
 # ============================================================================
 
 # Genetic Algorithm settings
-GA_POPULATION_SIZE = 30
-GA_GENERATIONS = 20
+GA_POPULATION_SIZE = 50
+GA_GENERATIONS = 50
 GA_CROSSOVER_PROB = 0.6
 GA_MUTATION_PROB = 0.3
 GA_TOURNAMENT_SIZE = 3
@@ -123,7 +124,7 @@ def get_results_file_path(filename: str, results_dir: str = RESULTS_DIR) -> Path
     return Path(results_dir) / filename
 
 
-def create_directories(base_path: Path | None = None) -> dict:
+def create_directories(base_path: Optional[Path] = None) -> dict:
     """Create all necessary project directories."""
     if base_path is None:
         base_path = Path.cwd()

@@ -48,9 +48,9 @@ venv.bak/
 # environment*.yml
 
 # Data files
-data/*.csv
-data/*.feather
-data/*.xlsx
+# data/*.csv
+# data/*.feather
+# data/*.xlsx
 # notebooks/
 
 # Output and figures

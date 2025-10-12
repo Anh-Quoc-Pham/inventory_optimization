@@ -1,0 +1,31 @@
+product_id,product_name,category,price,cost
+1,Dell Galaxy Buds2,Electronics,1830000.0,536666.8320992299
+2,Lenovo Samsung T7 SSD,Electronics,1080000.0,243820.4150125252
+3,LG Logitech G502 Mouse,Electronics,1240000.0,367565.5639870071
+4,Apple JBL Flip 6,Electronics,1180000.0,330524.8542178554
+5,Dell AirPods Pro,Electronics,1650000.0,330523.23426462355
+6,Dell Keychron K2 Keyboard,Electronics,1420000.0,413649.88958173175
+7,Zara Stretch Denim Jeans,Clothing,370000.0,98656.50788142317
+8,GAP Slim Fit Chinos,Clothing,620000.0,131643.817530634
+9,Uniqlo Straw Hat,Clothing,1140000.0,259657.50055667968
+10,Puma Structured Tote Bag,Clothing,270000.0,54394.93852625396
+11,Uniqlo Lightweight Jacket,Clothing,1190000.0,299063.81324891315
+12,Nike Cotton V-Neck Tee,Clothing,170000.0,38830.61353165706
+13,HomeOne Cotton Bed Sheet Set,Home Goods,660000.0,192892.37726410205
+14,Habitat Ceramic Dinner Set,Home Goods,760000.0,189970.51279292864
+15,Cozy Living Electric Kettle,Home Goods,740000.0,183677.55156735543
+16,Muji Shower Curtain,Home Goods,370000.0,86588.48089662126
+17,IKEA Non-Stick Frying Pan,Home Goods,510000.0,135073.90908892025
+18,Jysk Coffee Maker,Home Goods,260000.0,60105.36157585637
+19,Vinamilk Green Tea,Food,480000.0,142036.17540540543
+20,Masan Rice Vinegar,Food,480000.0,117314.31715105822
+21,Acecook Dried Mushrooms,Food,370000.0,87921.92765249926
+22,Vinh Thanh Soy Sauce,Food,370000.0,110684.29379799779
+23,Kinh Do Chili Sauce,Food,170000.0,41503.32395654987
+24,Masan Soy Milk,Food,360000.0,85789.4125718022
+25,Ohui Hair Mask,Beauty,780000.0,217102.4276740982
+26,Vichy Highlighter,Beauty,280000.0,79363.69318894028
+27,Neutrogena Perfume,Beauty,390000.0,111427.22514025032
+28,Sulwhasoo Foundation,Beauty,360000.0,89132.60427442756
+29,Neutrogena Bath Bombs,Beauty,490000.0,105113.01233955809
+30,Sulwhasoo Body Scrub,Beauty,280000.0,60247.171717915866

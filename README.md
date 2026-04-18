@@ -22,6 +22,13 @@ A system that helps retail stores manage their inventory better. It analyzes sal
 - **Visual Charts**: Creates graphs and charts to show results
 - **Clear Recommendations**: Gives specific instructions on what to transfer
 
+## Team Docs Quick Links
+
+For faster team onboarding and chapter benchmarking context, start here:
+
+- [Project Logic and Benchmark Notes](docs/logic.md)
+- [Team Setup and Project Flow Guide](docs/TEAM_SETUP_AND_FLOW.md)
+
 ## Project Structure
 
 ```

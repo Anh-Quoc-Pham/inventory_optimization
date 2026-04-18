@@ -8,6 +8,7 @@ This document explains the logic and mathematical foundations of both optimizati
 2. [Genetic Algorithm](#genetic-algorithm)
 3. [Algorithm Comparison](#algorithm-comparison)
 4. [Hand Calculation Examples](#hand-calculation-examples)
+5. [Chapter 3 Benchmark Pipeline (Simplex Integration)](#chapter-3-benchmark-pipeline-simplex-integration)
 
 ---
 
@@ -451,3 +452,69 @@ Mutated: [A→C: X,10] [B→D: Y,10] [A→D: X,8]
 | GA (Optimized)   | 65,000 VND | 3         | 100% (30/30 units) | After evolution |
 
 _The GA might find alternative solutions like splitting transfers differently or finding more efficient routing that the rule-based approach missed due to its greedy nature._
+
+---
+
+## Chapter 3 Benchmark Pipeline (Simplex Integration)
+
+### Muc tieu
+
+Muc nay dong goi toan bo luong benchmark dung cho Chuong 3, de:
+
+- Chay cung mot bo du lieu cho 3 thuat toan: Rule-Based, Genetic Algorithm, Primal Simplex.
+- So sanh KPI dong nhat (coverage, chi phi, thoi gian, so transfer, balanced improvement).
+- Xuat artifact phuc vu trinh bay 3.4, 3.5, 3.6.
+
+### Lenh chay de tai lap
+
+```bash
+python src/main.py --simplex
+python scripts/run_chapter3_benchmark.py
+```
+
+### Flow benchmark 11 buoc
+
+1. Gioi thieu du lieu dau vao.
+2. Phan tich Days of Inventory.
+3. Tao excess_inventory va needed_inventory.
+4. Xay transportation instances theo tung product.
+5. Minh hoa bai toan nho 2x2 gan-bang-tay.
+6. Chay benchmark day du cho 3 thuat toan.
+7. Decode va inspect best transfer plan.
+8. Tong hop KPI impact.
+9. So sanh Rule-Based voi Primal Simplex.
+10. So sanh Genetic Algorithm voi Primal Simplex.
+11. Nhung network visualization, cost heatmap, va viet tom tat ngan cho Chuong 3.
+
+### Ket qua benchmark gan nhat (2026-04-18)
+
+Nguon: results/chapter3_benchmark/chapter3_algorithm_comparison.csv
+
+| Algorithm | Coverage | Total Cost (VND) | Transfers | Total Units | Time (s) | Balanced Improvement | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Rule-Based | 100.00% | 289,053,289.90 | 150 | 2527 | 0.463 | 27 | COMPLETED |
+| Genetic Algorithm | 53.11% | 559,987,183.06 | 298 | 1342 | 415.706 | 9 | COMPLETED |
+| Primal Simplex | 100.00% | 287,300,127.52 | 150 | 2527 | 0.390 | 27 | OPTIMAL 30/30 |
+
+Manual case 2x2: objective = 85.0, trung expected = 85.0.
+
+### Ket luan cho Chuong 3
+
+- Primal Simplex la phuong an tot nhat theo tieu chi coverage cao nhat va cost thap nhat.
+- So voi Rule-Based, Simplex giam 1,753,162.37 VND voi cung coverage 100%.
+- So voi GA, Simplex giam 272,687,055.53 VND va nhanh hon rat nhieu.
+
+### Mapping artifact cho 3.4 / 3.5 / 3.6
+
+| Chuong | Artifact | Muc dich |
+| --- | --- | --- |
+| 3.4 | results/chapter3_benchmark/chapter3_summary.csv | Mo ta quy mo du lieu, imbalance, so bai toan van tai |
+| 3.5 | results/chapter3_benchmark/chapter3_algorithm_comparison.csv | Bang benchmark KPI 3 thuat toan |
+| 3.5 | results/chapter3_benchmark/chapter3_manual_case_transfer_plan.csv | Minh hoa LP nho de doi chieu Simplex |
+| 3.5 | results/chapter3_benchmark/chapter3_best_transfer_plan.csv | Ke hoach dieu chuyen tot nhat de phan tich |
+| 3.6 | visualizations/chapter3_benchmark/chapter3_store_transfer_network.graphml | Mang dieu chuyen de khai thac trong Gephi |
+| 3.6 | visualizations/chapter3_benchmark/network_overview.png | Tong quan network luong chuyen |
+| 3.6 | visualizations/chapter3_benchmark/hub_analysis.png | Phan tich diem hub |
+| 3.6 | visualizations/chapter3_benchmark/flow_intensity_map.png | Minh hoa cuong do dong chay |
+| 3.6 | visualizations/chapter3_benchmark/chapter3_cost_heatmap_product_1.png | Heatmap chi phi van chuyen |
+| 3.6 | results/chapter3_benchmark/chapter3_metadata.json | Metadata benchmark va danh sach artifact |

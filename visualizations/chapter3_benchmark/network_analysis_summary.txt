@@ -1,0 +1,63 @@
+STORE TRANSFER NETWORK ANALYSIS SUMMARY
+==================================================
+
+Network Overview:
+- Total Stores: 20
+- Total Store-to-Store Transfers: 90
+- Network Density: 0.2368
+- Average Degree: 9.00
+
+Store Analysis:
+Top 10 Stores by Total Transfer Volume:
+ 1. Quận 3 Market Center           | Total:    394 units (In:    223, Out:    171)
+ 2. Tân Bình Market Center         | Total:    362 units (In:    145, Out:    217)
+ 3. Bình Thạnh Market Center       | Total:    348 units (In:    159, Out:    189)
+ 4. Co.op Mart Mỹ Đình             | Total:    321 units (In:    104, Out:    217)
+ 5. FiviMart - Vivo City           | Total:    317 units (In:    148, Out:    169)
+ 6. Hapro Gò Vấp                   | Total:    311 units (In:    227, Out:     84)
+ 7. CircleK - Diamond Plaza        | Total:    308 units (In:    243, Out:     65)
+ 8. VinMart Long Biên              | Total:    302 units (In:    145, Out:    157)
+ 9. VinMart - Lotte Mart           | Total:    297 units (In:    152, Out:    145)
+10. Aeon Quận 1                    | Total:    281 units (In:    141, Out:    140)
+
+Stores by Outgoing Transfers:
+ 1. Tân Bình Market Center         | Outgoing:    217 units
+ 2. Co.op Mart Mỹ Đình             | Outgoing:    217 units
+ 3. Bình Thạnh Market Center       | Outgoing:    189 units
+ 4. Cẩm Lệ Market Center           | Outgoing:    187 units
+ 5. Quận 3 Market Center           | Outgoing:    171 units
+ 6. FiviMart - Vivo City           | Outgoing:    169 units
+ 7. VinMart Long Biên              | Outgoing:    157 units
+ 8. Hapro Thanh Xuân               | Outgoing:    150 units
+ 9. VinMart - Lotte Mart           | Outgoing:    145 units
+10. Aeon Quận 1                    | Outgoing:    140 units
+
+Stores by Incoming Transfers:
+ 1. CircleK - Diamond Plaza        | Incoming:    243 units
+ 2. Hapro Gò Vấp                   | Incoming:    227 units
+ 3. Quận 3 Market Center           | Incoming:    223 units
+ 4. Bình Thạnh Market Center       | Incoming:    159 units
+ 5. VinMart - Lotte Mart           | Incoming:    152 units
+ 6. FiviMart - Vivo City           | Incoming:    148 units
+ 7. Tân Bình Market Center         | Incoming:    145 units
+ 8. VinMart Long Biên              | Incoming:    145 units
+ 9. Aeon Quận 1                    | Incoming:    141 units
+10. Lan Chi - Indochina Plaza      | Incoming:    130 units
+
+Transfer Analysis:
+Top 15 Store-to-Store Transfers:
+ 1. Cẩm Lệ Market Center → VinMart - Lotte Mart        |     96 units (8 products)
+ 2. Hapro Gò Vấp → FiviMart - Vivo City                |     84 units (5 products)
+ 3. Co.op Mart Hai Bà Trưng → Co.op Mart Mỹ Đình       |     76 units (3 products)
+ 4. Bình Thạnh Market Center → Tân Bình Market Center  |     74 units (3 products)
+ 5. Hapro Thanh Xuân → VinMart Long Biên               |     73 units (4 products)
+ 6. Co.op Mart Mỹ Đình → Hoàn Kiếm Market Center       |     71 units (2 products)
+ 7. Tân Bình Market Center → Quận 3 Market Center      |     70 units (3 products)
+ 8. Quận 3 Market Center → Bình Thạnh Market Center    |     65 units (3 products)
+ 9. Tân Bình Market Center → CircleK - Diamond Plaza   |     62 units (2 products)
+10. VinMart Long Biên → Hapro Thanh Xuân               |     61 units (2 products)
+11. FiviMart - Vivo City → Hapro Gò Vấp                |     61 units (2 products)
+12. Bình Thạnh Market Center → Aeon Quận 1             |     61 units (2 products)
+13. Saigon Retail - Han Market Complex → Hapro Gò Vấp  |     58 units (2 products)
+14. Mega Market Quận 7 → Quận 3 Market Center          |     48 units (2 products)
+15. Hoàn Kiếm Market Center → VinMart Long Biên        |     47 units (2 products)

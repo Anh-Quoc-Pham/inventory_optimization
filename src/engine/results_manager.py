@@ -136,7 +136,7 @@ class ResultsManager:
 
             for algorithm, (transfer_plan, impact_df) in results_dict.items():
                 marker = "[BEST]" if algorithm == best_algorithm else "      "
-                f.write(f"\n{marker} {algorithm} Algorithm:\n")
+                f.write(f"\n{marker} {algorithm}:\n")
 
                 if transfer_plan is not None and not transfer_plan.empty:
                     f.write(f"   Status: [OK] Completed Successfully\n")
@@ -144,7 +144,7 @@ class ResultsManager:
 
                     if "transport_cost" in transfer_plan.columns:
                         total_cost = transfer_plan["transport_cost"].sum()
-                        f.write(f"   Total Transport Cost: ${total_cost:,.2f}\n")
+                        f.write(f"   Total Transport Cost: {total_cost:,.2f} VND\n")
 
                     if "units" in transfer_plan.columns:
                         total_units = transfer_plan["units"].sum()
@@ -186,7 +186,7 @@ class ResultsManager:
 
                 if "transport_cost" in best_plan.columns:
                     total_cost = best_plan["transport_cost"].sum()
-                    f.write(f"Total Cost: ${total_cost:,.2f}\n")
+                    f.write(f"Total Cost: {total_cost:,.2f} VND\n")
 
                 if "units" in best_plan.columns:
                     total_units = best_plan["units"].sum()

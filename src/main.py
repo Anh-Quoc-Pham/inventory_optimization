@@ -10,6 +10,11 @@ sys.path.insert(0, str(project_root))
 
 import pandas as pd
 
+from src.adapters.simplex_solution_to_transfer_plan import (
+    decode_simplex_solution_to_transfer_plan,
+    merge_transfer_plans,
+)
+
 # Import configuration
 from src.config import (
     DATA_DIR,
@@ -18,7 +23,6 @@ from src.config import (
     GA_GENERATIONS,
     GA_MUTATION_PROB,
     GA_POPULATION_SIZE,
-    LOGS_DIR,
     MAX_INVENTORY_DAYS,
     MIN_INVENTORY_DAYS,
     NUM_PRODUCTS,
@@ -27,9 +31,14 @@ from src.config import (
     RESULTS_DIR,
     SALES_DAYS,
     SHORTAGE_PERCENT,
+    SIMPLEX_DUMMY_EXCESS_COST,
+    SIMPLEX_DUMMY_SHORTAGE_COST,
+    SIMPLEX_MAX_ITERATIONS,
+    SIMPLEX_PIVOT_RULE,
+    SIMPLEX_TOLERANCE,
+    SIMPLEX_USE_BLAND,
     VISUALIZATIONS_DIR,
     create_directories,
-    get_ga_config,
 )
 
 # Import components
@@ -38,6 +47,10 @@ from src.engine.analyzer import InventoryAnalyzer
 from src.engine.genetic_algorithm import GeneticAlgorithmOptimizer
 from src.engine.results_manager import ResultsManager
 from src.engine.rule_based import RuleBasedOptimizer
+from src.simplex.lp_standard_form import transportation_instance_to_standard_form
+from src.simplex.primal_simplex_solver import PrimalSimplexSolver
+from src.transport.transportation_instance_builder import build_transportation_instances
+from src.utils.logger import get_optimization_logger
 
 
 def setup_directories():
@@ -97,10 +110,13 @@ def run_analysis(args):
     # Calculate total excess and needed units
     excess_units = excess_df["excess_units"].sum()
     needed_units = needed_df["needed_units"].sum()
+    excess_to_needed_ratio = excess_units / needed_units if needed_units > 0 else float(
+        "inf"
+    )
 
     print(f"\nTotal excess units: {excess_units}")
     print(f"Total needed units: {needed_units}")
-    print(f"Excess to needed ratio: {excess_units / needed_units:.2f}")
+    print(f"Excess to needed ratio: {excess_to_needed_ratio:.2f}")
 
     return analyzer, analysis_df, excess_df, needed_df
 
@@ -202,6 +218,188 @@ def run_ga_optimization(analyzer, excess_df, needed_df, args):
     return transfer_plan, None
 
 
+def run_simplex_optimization(analyzer, excess_df, needed_df, args):
+    """Run transportation LP + primal simplex optimization."""
+    print("\n=== PRIMAL SIMPLEX OPTIMIZATION ===")
+
+    logger_system = get_optimization_logger()
+    start_time = time.time()
+
+    parameters = {
+        "algorithm": "Primal Simplex",
+        "max_iterations": args.simplex_max_iterations,
+        "tolerance": args.simplex_tolerance,
+        "pivot_rule": args.simplex_pivot_rule,
+        "use_bland": args.simplex_use_bland,
+        "keep_history": args.simplex_keep_history,
+        "dummy_excess_cost": args.simplex_dummy_excess_cost,
+        "dummy_shortage_cost": args.simplex_dummy_shortage_cost,
+        "excess_items": len(excess_df) if excess_df is not None else 0,
+        "needed_items": len(needed_df) if needed_df is not None else 0,
+    }
+    logger_system.log_execution_start("simplex_optimization", parameters)
+
+    if excess_df is None or needed_df is None or excess_df.empty or needed_df.empty:
+        message = "No excess or needed inventory found. No simplex optimization required."
+        print(message)
+        logger_system.log_progress("simplex_optimization", message)
+        logger_system.log_execution_end(
+            "simplex_optimization",
+            time.time() - start_time,
+            {
+                "instances_created": 0,
+                "products_solved": 0,
+                "transfers_generated": 0,
+            },
+        )
+        return pd.DataFrame(), None
+
+    # Load matrices with integer store IDs for consistent lookups.
+    distance_matrix = pd.read_csv(
+        os.path.join(args.data_dir, "distance_matrix.csv"), index_col=0
+    )
+    transport_cost_matrix = pd.read_csv(
+        os.path.join(args.data_dir, "transport_cost_matrix.csv"), index_col=0
+    )
+    distance_matrix.index = distance_matrix.index.astype(int)
+    distance_matrix.columns = distance_matrix.columns.astype(int)
+    transport_cost_matrix.index = transport_cost_matrix.index.astype(int)
+    transport_cost_matrix.columns = transport_cost_matrix.columns.astype(int)
+
+    instances = build_transportation_instances(
+        excess_inventory=excess_df,
+        needed_inventory=needed_df,
+        distance_matrix=distance_matrix,
+        transport_cost_matrix=transport_cost_matrix,
+        allow_self_transfer=False,
+        dummy_shortage_cost=args.simplex_dummy_shortage_cost,
+        dummy_excess_cost=args.simplex_dummy_excess_cost,
+    )
+
+    logger_system.log_progress(
+        "simplex_optimization",
+        f"Transportation instances prepared: {len(instances)}",
+    )
+
+    if not instances:
+        logger_system.log_execution_end(
+            "simplex_optimization",
+            time.time() - start_time,
+            {
+                "instances_created": 0,
+                "products_solved": 0,
+                "transfers_generated": 0,
+            },
+        )
+        return pd.DataFrame(), None
+
+    solver = PrimalSimplexSolver(
+        max_iterations=args.simplex_max_iterations,
+        tolerance=args.simplex_tolerance,
+        pivot_rule=args.simplex_pivot_rule,
+        use_bland=args.simplex_use_bland,
+        keep_history=args.simplex_keep_history,
+    )
+
+    per_product_plans = []
+    product_summaries = []
+
+    for instance in instances:
+        try:
+            lp = transportation_instance_to_standard_form(instance)
+            result = solver.solve(lp)
+        except Exception as exc:
+            logger_system.log_progress(
+                "simplex_optimization",
+                f"Product {instance.product_id}: failed to build/solve LP ({exc})",
+            )
+            product_summaries.append(
+                {
+                    "product_id": instance.product_id,
+                    "status": "ERROR",
+                    "objective_value": None,
+                    "iterations": 0,
+                    "dummy_added": instance.dummy_added,
+                    "dummy_flow_count": 0,
+                    "error": str(exc),
+                }
+            )
+            continue
+
+        product_plan = pd.DataFrame()
+        if result.status == "OPTIMAL":
+            product_plan = decode_simplex_solution_to_transfer_plan(
+                simplex_result=result,
+                standard_form_lp=lp,
+                distance_matrix=distance_matrix,
+                transport_cost_matrix=transport_cost_matrix,
+            )
+            if not product_plan.empty:
+                per_product_plans.append(product_plan)
+
+        product_summary = {
+            "product_id": instance.product_id,
+            "status": result.status,
+            "objective_value": result.objective_value,
+            "iterations": result.iterations,
+            "dummy_added": instance.dummy_added,
+            "dummy_flow_count": result.diagnostics.get("dummy_flow_count", 0),
+        }
+        product_summaries.append(product_summary)
+
+        logger_system.log_progress(
+            "simplex_optimization",
+            (
+                f"Product {instance.product_id}: status={result.status}, "
+                f"objective={result.objective_value}, iterations={result.iterations}, "
+                f"dummy_flows={product_summary['dummy_flow_count']}"
+            ),
+        )
+
+    transfer_plan = merge_transfer_plans(per_product_plans)
+
+    # Save per-product diagnostics regardless of transfer existence.
+    diagnostics_path = os.path.join(args.results_dir, "simplex_product_status.csv")
+    pd.DataFrame(product_summaries).to_csv(diagnostics_path, index=False)
+
+    impact_df = None
+    if not transfer_plan.empty:
+        transfer_plan.to_csv(
+            os.path.join(args.results_dir, "simplex_transfers.csv"), index=False
+        )
+
+        impact_df, _ = analyzer.evaluate_plan_impact(transfer_plan)
+        pd.DataFrame(impact_df).to_csv(
+            os.path.join(args.results_dir, "simplex_impact.csv")
+        )
+
+    execution_time = time.time() - start_time
+    logger_system.log_execution_end(
+        "simplex_optimization",
+        execution_time,
+        {
+            "instances_created": len(instances),
+            "products_solved": len(product_summaries),
+            "optimal_products": sum(1 for row in product_summaries if row["status"] == "OPTIMAL"),
+            "transfers_generated": len(transfer_plan),
+            "total_units": transfer_plan["units"].sum()
+            if not transfer_plan.empty
+            else 0,
+            "total_transport_cost": transfer_plan["transport_cost"].sum()
+            if not transfer_plan.empty
+            else 0,
+        },
+    )
+
+    print(f"Primal simplex optimization completed in {execution_time:.2f} seconds")
+    if transfer_plan.empty:
+        print("No simplex transfers were generated.")
+    else:
+        print(f"Simplex transfers generated: {len(transfer_plan)}")
+
+    return transfer_plan, impact_df
+
+
 def create_results(analysis_df, results_dict, analyzer, args):
     """Create simplified results: summary and best transfer plan."""
     print("\n=== GENERATING RESULTS ===")
@@ -275,6 +473,7 @@ def main():
     parser.add_argument(
         "--ga", action="store_true", help="Run genetic algorithm optimization"
     )
+    parser.add_argument("--simplex", action="store_true", help="Run primal simplex optimization")
     parser.add_argument(
         "--all", action="store_true", help="Run all optimization methods"
     )
@@ -303,6 +502,56 @@ def main():
         type=float,
         default=GA_MUTATION_PROB,
         help="GA mutation probability",
+    )
+
+    # Primal simplex options
+    parser.add_argument(
+        "--simplex-max-iterations",
+        type=int,
+        default=SIMPLEX_MAX_ITERATIONS,
+        help="Maximum simplex iterations per product LP",
+    )
+    parser.add_argument(
+        "--simplex-tolerance",
+        type=float,
+        default=SIMPLEX_TOLERANCE,
+        help="Numerical tolerance for simplex operations",
+    )
+    parser.add_argument(
+        "--simplex-pivot-rule",
+        type=str,
+        default=SIMPLEX_PIVOT_RULE,
+        choices=["dantzig", "bland"],
+        help="Pivot entering-variable rule",
+    )
+    parser.add_argument(
+        "--simplex-use-bland",
+        action="store_true",
+        default=SIMPLEX_USE_BLAND,
+        help="Enable Bland tie-break anti-cycling",
+    )
+    parser.add_argument(
+        "--simplex-no-bland",
+        action="store_false",
+        dest="simplex_use_bland",
+        help="Disable Bland anti-cycling fallback",
+    )
+    parser.add_argument(
+        "--simplex-keep-history",
+        action="store_true",
+        help="Keep simplex tableau snapshots for diagnostics",
+    )
+    parser.add_argument(
+        "--simplex-dummy-excess-cost",
+        type=float,
+        default=SIMPLEX_DUMMY_EXCESS_COST,
+        help="Dummy destination cost when supply > demand",
+    )
+    parser.add_argument(
+        "--simplex-dummy-shortage-cost",
+        type=float,
+        default=SIMPLEX_DUMMY_SHORTAGE_COST,
+        help="Dummy source penalty when demand > supply (default: inferred)",
     )
 
     # Display options
@@ -348,6 +597,13 @@ def main():
             analyzer, excess_df, needed_df, args
         )
         results_dict["Genetic Algorithm"] = (transfer_plan, impact_df)
+
+    # --all now includes all 3 solvers for direct baseline comparison.
+    if args.simplex or args.all:
+        transfer_plan, impact_df = run_simplex_optimization(
+            analyzer, excess_df, needed_df, args
+        )
+        results_dict["Primal Simplex"] = (transfer_plan, impact_df)
 
     # Create comprehensive results and reports
     if results_dict:

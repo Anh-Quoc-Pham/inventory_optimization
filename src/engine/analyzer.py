@@ -110,7 +110,7 @@ class InventoryAnalyzer:
         sales_metrics["quantity_cv"] = (
             sales_metrics["quantity_std"] / sales_metrics["quantity_mean"]
         )
-        sales_metrics["quantity_cv"].fillna(0, inplace=True)
+        sales_metrics["quantity_cv"] = sales_metrics["quantity_cv"].fillna(0)
 
         # Calculate days since last sale
         last_sale_date = (
@@ -143,13 +143,13 @@ class InventoryAnalyzer:
             "revenue_mean",
             "quantity_cv",
         ]:
-            analysis_df[col].fillna(0, inplace=True)
+            analysis_df[col] = analysis_df[col].fillna(0)
 
         # Calculate days of inventory based on average daily sales
         # Use the mean quantity per sale (matches data generator logic)
         analysis_df["avg_daily_sales"] = analysis_df["quantity_mean"]
-        analysis_df["avg_daily_sales"].replace(
-            0, 0.01, inplace=True
+        analysis_df["avg_daily_sales"] = analysis_df["avg_daily_sales"].replace(
+            0, 0.01
         )  # Avoid division by zero
 
         analysis_df["days_of_inventory"] = (
@@ -181,9 +181,6 @@ class InventoryAnalyzer:
         return analysis_df
 
     def identify_inventory_imbalances(self, min_days=None, max_days=None):
-        """Use config defaults if not provided."""
-        min_days = min_days or MIN_INVENTORY_DAYS
-        max_days = max_days or MAX_INVENTORY_DAYS
         """
         Identify inventory imbalances across stores.
         - Excess: more than max_days of inventory
@@ -196,6 +193,11 @@ class InventoryAnalyzer:
         Returns:
             Tuple of (excess_inventory_df, needed_inventory_df)
         """
+        if min_days is None:
+            min_days = MIN_INVENTORY_DAYS
+        if max_days is None:
+            max_days = MAX_INVENTORY_DAYS
+
         print("Identifying inventory imbalances...")
 
         if self.analysis_df is None:
@@ -305,9 +307,9 @@ class InventoryAnalyzer:
         post_analysis["days_of_inventory"] = (
             post_analysis["current_stock"] / post_analysis["avg_daily_sales"]
         )
-        post_analysis["days_of_inventory"].replace(
-            np.inf, 365, inplace=True
-        )  # Cap at 1 year for zero sales
+        post_analysis["days_of_inventory"] = post_analysis[
+            "days_of_inventory"
+        ].replace(np.inf, 365)  # Cap at 1 year for zero sales
 
         # Identify inventory status after transfers
         min_days = MIN_INVENTORY_DAYS

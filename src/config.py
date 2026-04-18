@@ -71,6 +71,14 @@ GA_CROSSOVER_PROB = 0.6
 GA_MUTATION_PROB = 0.3
 GA_TOURNAMENT_SIZE = 3
 
+# Primal Simplex settings
+SIMPLEX_MAX_ITERATIONS = 3000
+SIMPLEX_TOLERANCE = 1e-9
+SIMPLEX_PIVOT_RULE = "dantzig"  # dantzig | bland
+SIMPLEX_USE_BLAND = True
+SIMPLEX_DUMMY_EXCESS_COST = 0.0
+SIMPLEX_DUMMY_SHORTAGE_COST = None
+
 # Rule-Based optimization settings
 DISTANCE_WEIGHT = 0.4
 EXCESS_WEIGHT = 0.3
@@ -89,6 +97,8 @@ ENVIRONMENTS = {
         "debug": True,
         "ga_population": 30,
         "ga_generations": 20,
+        "simplex_max_iterations": 1000,
+        "simplex_tolerance": 1e-9,
         "num_products": 20,
         "sales_days": 90,
     },
@@ -96,6 +106,8 @@ ENVIRONMENTS = {
         "debug": False,
         "ga_population": GA_POPULATION_SIZE,
         "ga_generations": GA_GENERATIONS,
+        "simplex_max_iterations": SIMPLEX_MAX_ITERATIONS,
+        "simplex_tolerance": SIMPLEX_TOLERANCE,
         "num_products": NUM_PRODUCTS,
         "sales_days": SALES_DAYS,
     },
@@ -103,6 +115,8 @@ ENVIRONMENTS = {
         "debug": True,
         "ga_population": 10,
         "ga_generations": 5,
+        "simplex_max_iterations": 200,
+        "simplex_tolerance": 1e-8,
         "num_products": 10,
         "sales_days": 30,
     },
@@ -155,4 +169,16 @@ def get_ga_config() -> dict:
         "crossover_prob": GA_CROSSOVER_PROB,
         "mutation_prob": GA_MUTATION_PROB,
         "tournament_size": GA_TOURNAMENT_SIZE,
+    }
+
+
+def get_simplex_config() -> dict:
+    """Get primal simplex configuration as dictionary."""
+    return {
+        "max_iterations": SIMPLEX_MAX_ITERATIONS,
+        "tolerance": SIMPLEX_TOLERANCE,
+        "pivot_rule": SIMPLEX_PIVOT_RULE,
+        "use_bland": SIMPLEX_USE_BLAND,
+        "dummy_excess_cost": SIMPLEX_DUMMY_EXCESS_COST,
+        "dummy_shortage_cost": SIMPLEX_DUMMY_SHORTAGE_COST,
     }

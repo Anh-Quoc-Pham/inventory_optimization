@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+if __name__ == "__main__" or "src.engine" not in sys.modules:
+    project_root = Path(__file__).parent.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
 import pandas as pd
 import numpy as np
 from scipy.optimize import linprog

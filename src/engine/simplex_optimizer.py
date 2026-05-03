@@ -144,3 +144,101 @@ class SimplexOptimizer:
         self.logger_system.log_execution_end("simplex_optimization", execution_time, results)
 
         return self.transfer_plan
+
+
+if __name__ == "__main__":
+    import os
+    from pathlib import Path
+
+    # Tự động xác định thư mục gốc của dự án
+    project_root = Path(__file__).parent.parent.parent
+    data_dir = project_root / "data"
+    results_dir = project_root / "results"
+
+    # Tạo thư mục results nếu chưa có
+    results_dir.mkdir(exist_ok=True)
+
+    print("Testing Simplex Optimizer (Linear Programming)")
+    print("=" * 70)
+
+    # 1. Kiểm tra các file dữ liệu đầu vào cần thiết
+    required_files = [
+        "sales_data.csv",
+        "inventory_data.csv",
+        "distance_matrix.csv",
+        "transport_cost_matrix.csv",
+    ]
+
+    print("Checking required data files...")
+    for file in required_files:
+        if not (data_dir / file).exists():
+            print(f"Required file {file} not found. Please run data generator first.")
+            exit(1)
+        else:
+            print(f"[OK] {file}")
+
+    # 2. Khởi tạo Analyzer và Phân tích tồn kho (Tìm hàng thừa/thiếu)
+    try:
+        from src.engine.analyzer import InventoryAnalyzer
+
+        print("\nLoading and analyzing data...")
+        analyzer = InventoryAnalyzer()
+
+        analyzer.load_data(
+            sales_path=str(data_dir / "sales_data.csv"),
+            inventory_path=str(data_dir / "inventory_data.csv"),
+            stores_path=str(data_dir / "stores.csv") if (data_dir / "stores.csv").exists() else None,
+            products_path=str(data_dir / "products.csv") if (data_dir / "products.csv").exists() else None,
+        )
+
+        analyzer.analyze_sales_data()
+        excess_df, needed_df = analyzer.identify_inventory_imbalances()
+
+        print(f"Analysis complete:")
+        print(f"   • Products with excess: {len(excess_df)}")
+        print(f"   • Products needed: {len(needed_df)}")
+        print(f"   • Total excess units: {excess_df['excess_units'].sum():,}")
+        print(f"   • Total needed units: {needed_df['needed_units'].sum():,}")
+
+    except ImportError:
+        print("Error: Could not import InventoryAnalyzer. Ensure src/engine/analyzer.py exists.")
+        exit(1)
+
+    # 3. Chạy thuật toán Simplex
+    print("\nCreating Simplex optimizer...")
+    optimizer = SimplexOptimizer()
+
+    # Nạp ma trận
+    optimizer.load_matrices(
+        distance_path=str(data_dir / "distance_matrix.csv"),
+        cost_path=str(data_dir / "transport_cost_matrix.csv"),
+    )
+
+    print("Running Simplex optimization...")
+    transfer_plan = optimizer.optimize(excess_df, needed_df)
+
+    # 4. Đánh giá và lưu kết quả
+    if transfer_plan is not None and not transfer_plan.empty:
+        output_path = str(results_dir / "simplex_transfers_test.csv")
+        transfer_plan.to_csv(output_path, index=False)
+
+        print(f"\nResults saved to: {output_path}")
+        print("Simplex Algorithm test completed successfully!")
+
+        total_units = transfer_plan['units'].sum()
+        total_cost = transfer_plan['transport_cost'].sum()
+        avg_cost = total_cost / total_units if total_units > 0 else 0
+
+        print(f"\nSimplex Results Summary:")
+        print(f"   • Total transfers: {len(transfer_plan)}")
+        print(f"   • Total units to transfer: {total_units}")
+        print(f"   • Total transport cost: {total_cost:,.0f} VND")
+        print(f"   • Average cost per unit: {avg_cost:,.0f} VND")
+
+        print(f"\nSample transfers (top 3):")
+        cols_to_show = ["from_store_id", "to_store_id", "product_id", "units", "transport_cost"]
+        print(transfer_plan[cols_to_show].head(3).to_string(index=False))
+    else:
+        print("\nNo transfers were generated. This might indicate:")
+        print("   • No beneficial transfers exist")
+        print("   • Excess and Needed inventory do not match")

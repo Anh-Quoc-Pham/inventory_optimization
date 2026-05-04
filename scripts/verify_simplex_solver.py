@@ -23,7 +23,7 @@ from src.engine.rule_based import RuleBasedOptimizer  # noqa: E402
 from src.simplex.lp_standard_form import transportation_instance_to_standard_form  # noqa: E402
 from src.simplex.primal_simplex_solver import PrimalSimplexSolver  # noqa: E402
 from src.transport.transportation_instance_builder import build_transportation_instances  # noqa: E402
-
+from src.engine.modi_optimizer import MODIOptimizer
 
 def _assert_transfer_schema(df: pd.DataFrame, label: str) -> None:
     missing = [col for col in TRANSFER_PLAN_COLUMNS if col not in df.columns]
@@ -118,6 +118,20 @@ def run_manual_2x2_case() -> None:
     assert abs(total_cost - 85.0) <= 1e-6, (
         f"Unexpected transport cost {total_cost}, expected 85.0"
     )
+
+    modi = MODIOptimizer(
+        distance_matrix=distance_matrix,
+        transport_cost_matrix=transport_cost_matrix,
+        max_iterations=500,
+        tolerance=1e-9,
+    )
+    modi_plan = modi.optimize(excess_df, needed_df)
+    modi_cost = float(modi_plan["transport_cost"].sum()) if not modi_plan.empty else 0.0
+
+    assert abs(modi_cost - 85.0) <= 1e-6, (
+        f"MODI transport cost {modi_cost}, expected 85.0"
+    )
+    print(f"MODI cross-check passed: cost={modi_cost}")
 
     print("Manual 2x2 case passed")
     print(plan.to_string(index=False))

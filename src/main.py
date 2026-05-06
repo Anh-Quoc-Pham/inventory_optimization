@@ -51,7 +51,7 @@ from src.simplex.lp_standard_form import transportation_instance_to_standard_for
 from src.simplex.primal_simplex_solver import PrimalSimplexSolver
 from src.transport.transportation_instance_builder import build_transportation_instances
 from src.utils.logger import get_optimization_logger
-
+from src.engine.modi_optimizer import MODIOptimizer
 
 def setup_directories():
     """Create necessary directories using config."""
@@ -396,6 +396,47 @@ def run_simplex_optimization(analyzer, excess_df, needed_df, args):
         print("No simplex transfers were generated.")
     else:
         print(f"Simplex transfers generated: {len(transfer_plan)}")
+
+    return transfer_plan, impact_df
+
+
+def run_modi_optimization(analyzer, excess_df, needed_df, args):
+    """Run MODI optimizer and return (transfer_plan, impact_df)."""
+    from src.config import (
+        SIMPLEX_DUMMY_EXCESS_COST,
+        SIMPLEX_DUMMY_SHORTAGE_COST,
+        SIMPLEX_MAX_ITERATIONS,
+        SIMPLEX_TOLERANCE,
+    )
+
+    distance_matrix = pd.read_csv(
+        Path(args.data_dir) / "distance_matrix.csv", index_col=0
+    )
+    transport_cost_matrix = pd.read_csv(
+        Path(args.data_dir) / "transport_cost_matrix.csv", index_col=0
+    )
+    distance_matrix.index = distance_matrix.index.astype(int)
+    distance_matrix.columns = distance_matrix.columns.astype(int)
+    transport_cost_matrix.index = transport_cost_matrix.index.astype(int)
+    transport_cost_matrix.columns = transport_cost_matrix.columns.astype(int)
+
+    optimizer = MODIOptimizer(
+        distance_matrix=distance_matrix,
+        transport_cost_matrix=transport_cost_matrix,
+        max_iterations=getattr(args, "simplex_max_iterations", SIMPLEX_MAX_ITERATIONS),
+        tolerance=getattr(args, "simplex_tolerance", SIMPLEX_TOLERANCE),
+        dummy_shortage_cost=getattr(args, "simplex_dummy_shortage_cost", SIMPLEX_DUMMY_SHORTAGE_COST),
+        dummy_excess_cost=getattr(args, "simplex_dummy_excess_cost", SIMPLEX_DUMMY_EXCESS_COST),
+    )
+
+    transfer_plan = optimizer.optimize(excess_df, needed_df)
+
+    impact_df = None
+    if transfer_plan is not None and not transfer_plan.empty:
+        try:
+            impact_df, _ = analyzer.evaluate_plan_impact(transfer_plan)
+        except Exception:
+            impact_df = None
 
     return transfer_plan, impact_df
 

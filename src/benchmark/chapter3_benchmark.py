@@ -39,6 +39,7 @@ from src.main import (
     run_ga_optimization,
     run_rule_based_optimization,
     run_simplex_optimization,
+    run_modi_optimization,
 )
 from src.simplex.lp_standard_form import transportation_instance_to_standard_form
 from src.simplex.primal_simplex_solver import PrimalSimplexSolver
@@ -457,6 +458,16 @@ def run_chapter3_benchmark(
         "elapsed": sp_elapsed,
         "status_solver": simplex_status_text,
         "simplex_status_df": simplex_status_df,
+    }
+
+    modi_start = time.perf_counter()
+    modi_plan, modi_impact = run_modi_optimization(analyzer, excess_df, needed_df, args)
+    modi_elapsed = time.perf_counter() - modi_start
+    algo_outputs["MODI"] = {
+        "transfer_plan": modi_plan,
+        "impact": modi_impact,
+        "elapsed": modi_elapsed,
+        "status_solver": "COMPLETED" if modi_plan is not None else "FAILED",
     }
 
     # Build benchmark comparison table
